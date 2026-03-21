@@ -13,20 +13,11 @@ const { apiReference } = require("@scalar/express-api-reference");
 const { errorHandler } = require("./app/middlewares/error-handler");
 const { AppError } = require("./app/utils/app-error");
 
-// Module routers (imported lazily; will exist after Phase 2+)
-let authRouter, memoryRouter, personalityRouter, chatRouter;
-try {
-  authRouter = require("./app/modules/auth/auth-router");
-} catch {}
-try {
-  memoryRouter = require("./app/modules/memory/memory-router");
-} catch {}
-try {
-  personalityRouter = require("./app/modules/personality/personality-router");
-} catch {}
-try {
-  chatRouter = require("./app/modules/chat/chat-router");
-} catch {}
+// Module routers
+const authRouter = require("./app/modules/auth/auth-router");
+const memoryRouter = require("./app/modules/memory/memory-router");
+const personalityRouter = require("./app/modules/personality/personality-router");
+const chatRouter = require("./app/modules/chat/chat-router");
 
 const app = express();
 
@@ -52,10 +43,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // API routes
-if (authRouter) app.use("/api/auth", authRouter);
-if (memoryRouter) app.use("/api/memory", memoryRouter);
-if (personalityRouter) app.use("/api/personality", personalityRouter);
-if (chatRouter) app.use("/api/chat", chatRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/memory", memoryRouter);
+app.use("/api/personality", personalityRouter);
+app.use("/api/chat", chatRouter);
 
 // API docs
 app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));

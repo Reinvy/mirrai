@@ -1,7 +1,7 @@
-"use strict";
+﻿"use strict";
 
 const { PGVectorStore } = require("@langchain/community/vectorstores/pgvector");
-const { embeddings } = require("./embedding");
+const { getEmbeddings } = require("./embedding");
 const { pool } = require("./db");
 
 let vectorstore = null;
@@ -9,7 +9,7 @@ let vectorstore = null;
 async function getVectorStore() {
   if (vectorstore) return vectorstore;
 
-  vectorstore = await PGVectorStore.initialize(embeddings, {
+  vectorstore = await PGVectorStore.initialize(getEmbeddings(), {
     pool,
     tableName: "langchain_pg_embeddings",
     columns: {

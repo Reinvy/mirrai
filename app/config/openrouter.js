@@ -1,10 +1,17 @@
-"use strict";
+﻿"use strict";
 
 const { ChatOpenRouter } = require("@langchain/openrouter");
 
-const llm = new ChatOpenRouter({
-  model: process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini",
-  temperature: 0.7,
-});
+let _llm = null;
 
-module.exports = { llm };
+function getLlm() {
+  if (!_llm) {
+    _llm = new ChatOpenRouter({
+      model: process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini",
+      temperature: 0.7,
+    });
+  }
+  return _llm;
+}
+
+module.exports = { getLlm };

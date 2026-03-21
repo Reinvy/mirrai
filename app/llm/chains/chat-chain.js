@@ -1,9 +1,16 @@
-"use strict";
+﻿"use strict";
 
 const { StringOutputParser } = require("@langchain/core/output_parsers");
-const { llm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openrouter");
 const { chatPrompt } = require("../prompts/chat-prompt");
 
-const chatChain = chatPrompt.pipe(llm).pipe(new StringOutputParser());
+let _chain = null;
+
+const chatChain = {
+  invoke: async (input) => {
+    if (!_chain) _chain = chatPrompt.pipe(getLlm()).pipe(new StringOutputParser());
+    return _chain.invoke(input);
+  },
+};
 
 module.exports = { chatChain };
