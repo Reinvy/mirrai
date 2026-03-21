@@ -35,7 +35,21 @@ app.use(
     credentials: true,
   }),
 );
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        workerSrc: ["'self'", "blob:"],
+        fontSrc: ["'self'", "data:", "https:"],
+      },
+    },
+  }),
+);
 
 // Logging & parsing
 app.use(morgan("dev"));
@@ -50,7 +64,13 @@ app.use("/api/chat", chatRouter);
 
 // API docs
 app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));
-app.use("/docs", apiReference({ spec: { url: "/api-docs.json" } }));
+app.use(
+  "/docs",
+  apiReference({
+    spec: { url: "/api-docs.json" },
+    pageTitle: "MirrAI API Docs",
+  }),
+);
 
 // 404 handler
 app.use((req, res, next) => {
