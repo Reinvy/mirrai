@@ -1,46 +1,47 @@
-'use strict'
+"use strict";
 
-const swaggerJsdoc = require('swagger-jsdoc')
-const path = require('path')
+const swaggerJsdoc = require("swagger-jsdoc");
+const path = require("path");
 
 const options = {
   definition: {
-    openapi: '3.0.0',
+    openapi: "3.0.0",
     info: {
-      title: 'MirrAI API',
-      version: '1.0.0',
-      description: 'MirrAI — AI companion with memory, personality & emotion engines',
+      title: "MirrAI API",
+      version: "1.0.0",
+      description:
+        "MirrAI — AI companion with memory, personality & emotion engines",
     },
-    servers: [{ url: '/api', description: 'API base' }],
+    servers: [{ url: "/api", description: "API base" }],
     components: {
       securitySchemes: {
         bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
         },
       },
       schemas: {
         Error: {
-          type: 'object',
+          type: "object",
           properties: {
-            status: { type: 'string', example: 'error' },
-            message: { type: 'string' },
+            status: { type: "string", example: "error" },
+            message: { type: "string" },
           },
         },
         AuthResponse: {
-          type: 'object',
+          type: "object",
           properties: {
-            message: { type: 'string' },
+            message: { type: "string" },
             data: {
-              type: 'object',
+              type: "object",
               properties: {
-                token: { type: 'string' },
+                token: { type: "string" },
                 user: {
-                  type: 'object',
+                  type: "object",
                   properties: {
-                    id: { type: 'string' },
-                    name: { type: 'string' },
+                    id: { type: "string" },
+                    name: { type: "string" },
                   },
                 },
               },
@@ -48,41 +49,46 @@ const options = {
           },
         },
         Personality: {
-          type: 'object',
+          type: "object",
           properties: {
-            empathy: { type: 'number', minimum: 0, maximum: 1 },
-            logic: { type: 'number', minimum: 0, maximum: 1 },
-            humor: { type: 'number', minimum: 0, maximum: 1 },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
-            playfulness: { type: 'number', minimum: 0, maximum: 1 },
+            empathy: { type: "number", minimum: 0, maximum: 1 },
+            logic: { type: "number", minimum: 0, maximum: 1 },
+            humor: { type: "number", minimum: 0, maximum: 1 },
+            confidence: { type: "number", minimum: 0, maximum: 1 },
+            playfulness: { type: "number", minimum: 0, maximum: 1 },
           },
         },
         Memory: {
-          type: 'object',
+          type: "object",
           properties: {
-            id: { type: 'string' },
-            content: { type: 'string' },
-            type: { type: 'string', enum: ['SHORT_TERM', 'LONG_TERM', 'SEMANTIC', 'EMOTIONAL'] },
-            importanceScore: { type: 'number' },
-            createdAt: { type: 'string', format: 'date-time' },
+            id: { type: "string" },
+            content: { type: "string" },
+            type: {
+              type: "string",
+              enum: ["SHORT_TERM", "LONG_TERM", "SEMANTIC", "EMOTIONAL"],
+            },
+            importanceScore: { type: "number" },
+            createdAt: { type: "string", format: "date-time" },
           },
         },
         ChatResponse: {
-          type: 'object',
+          type: "object",
           properties: {
-            message: { type: 'string' },
+            message: { type: "string" },
             data: {
-              type: 'object',
+              type: "object",
               properties: {
-                response: { type: 'string' },
+                response: { type: "string" },
                 emotion: {
-                  type: 'object',
+                  type: "object",
                   properties: {
-                    emotion: { type: 'string' },
-                    confidence: { type: 'number' },
+                    emotion: { type: "string" },
+                    confidence: { type: "number" },
                   },
                 },
-                personality_snapshot: { $ref: '#/components/schemas/Personality' },
+                personality_snapshot: {
+                  $ref: "#/components/schemas/Personality",
+                },
               },
             },
           },
@@ -90,9 +96,9 @@ const options = {
       },
     },
   },
-  apis: [path.join(__dirname, '../modules/**/*-router.js')],
-}
+  apis: [path.join(__dirname, "../modules/**/*-router.js")],
+};
 
-const swaggerSpec = swaggerJsdoc(options)
+const swaggerSpec = swaggerJsdoc(options);
 
-module.exports = { swaggerSpec }
+module.exports = { swaggerSpec };

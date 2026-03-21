@@ -1,11 +1,15 @@
-'use strict'
+"use strict";
 
-const express = require('express')
-const { AuthValidation } = require('./auth-validation')
-const { registerController, loginController, logoutController } = require('./auth-controller')
-const { tokenVerify } = require('../../middlewares/token-verify')
+const express = require("express");
+const { AuthValidation } = require("./auth-validation");
+const {
+  registerController,
+  loginController,
+  logoutController,
+} = require("./auth-controller");
+const { tokenVerify } = require("../../middlewares/token-verify");
 
-const router = express.Router()
+const router = express.Router();
 
 /**
  * @openapi
@@ -45,7 +49,7 @@ const router = express.Router()
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/register', AuthValidation.validateRegister, registerController)
+router.post("/register", AuthValidation.validateRegister, registerController);
 
 /**
  * @openapi
@@ -81,7 +85,7 @@ router.post('/register', AuthValidation.validateRegister, registerController)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/login', AuthValidation.validateLogin, loginController)
+router.post("/login", AuthValidation.validateLogin, loginController);
 
 /**
  * @openapi
@@ -101,6 +105,6 @@ router.post('/login', AuthValidation.validateLogin, loginController)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/logout', tokenVerify, logoutController)
+router.post("/logout", tokenVerify, logoutController);
 
-module.exports = router
+module.exports = router;

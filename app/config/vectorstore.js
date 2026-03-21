@@ -1,27 +1,27 @@
-'use strict'
+"use strict";
 
-const { PGVectorStore } = require('@langchain/community/vectorstores/pgvector')
-const { embeddings } = require('./embedding')
-const { pool } = require('./db')
+const { PGVectorStore } = require("@langchain/community/vectorstores/pgvector");
+const { embeddings } = require("./embedding");
+const { pool } = require("./db");
 
-let vectorstore = null
+let vectorstore = null;
 
 async function getVectorStore() {
-  if (vectorstore) return vectorstore
+  if (vectorstore) return vectorstore;
 
   vectorstore = await PGVectorStore.initialize(embeddings, {
     pool,
-    tableName: 'langchain_pg_embeddings',
+    tableName: "langchain_pg_embeddings",
     columns: {
-      idColumnName: 'id',
-      vectorColumnName: 'embedding',
-      contentColumnName: 'content',
-      metadataColumnName: 'metadata',
+      idColumnName: "id",
+      vectorColumnName: "embedding",
+      contentColumnName: "content",
+      metadataColumnName: "metadata",
     },
-    distanceStrategy: 'cosine',
-  })
+    distanceStrategy: "cosine",
+  });
 
-  return vectorstore
+  return vectorstore;
 }
 
-module.exports = { getVectorStore }
+module.exports = { getVectorStore };

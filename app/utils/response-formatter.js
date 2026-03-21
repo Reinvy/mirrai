@@ -1,10 +1,10 @@
-'use strict'
+"use strict";
 
 function formatSuccessResponse({ message, data, meta }) {
   if (meta) {
-    return { message, meta, data }
+    return { message, meta, data };
   }
-  return { message, data }
+  return { message, data };
 }
 
-module.exports = { formatSuccessResponse }
+module.exports = { formatSuccessResponse };
