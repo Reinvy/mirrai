@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MemoryType {
+  SHORT_TERM
+  LONG_TERM
+  SEMANTIC
+  EMOTIONAL
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  password      String
+  tokenVersion  Int            @default(0)
+  createdAt     DateTime       @default(now())
+  deletedAt     DateTime?
+  conversations Conversation[]
+  memories      Memory[]
+  personality   Personality?
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  message   String
+  response  String
+  emotion   Json
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Memory {
+  id              String                      @id @default(cuid())
+  userId          String
+  content         String
+  embedding       Unsupported("vector(1536)")?
+  importanceScore Float                       @default(0.5)
+  type            MemoryType
+  createdAt       DateTime                    @default(now())
+  deletedAt       DateTime?
+  user            User                        @relation(fields: [userId], references: [id])
+}
+
+model Personality {
+  userId      String   @id
+  empathy     Float    @default(0.5)
+  logic       Float    @default(0.5)
+  humor       Float    @default(0.5)
+  confidence  Float    @default(0.5)
+  playfulness Float    @default(0.5)
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model TokenBlacklist {
+  token     String   @id
+  createdAt DateTime @default(now())
+}
