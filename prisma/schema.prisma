@@ -38,15 +38,15 @@ model Conversation {
 }
 
 model Memory {
-    id              String                       @id @default(cuid())
+    id              String                      @id @default(cuid())
     userId          String
     content         String
-    embedding       Unsupported("vector(1536)")?
-    importanceScore Float                        @default(0.5)
+    embedding       Unsupported("vector(768)")?
+    importanceScore Float                       @default(0.5)
     type            MemoryType
-    createdAt       DateTime                     @default(now())
+    createdAt       DateTime                    @default(now())
     deletedAt       DateTime?
-    user            User                         @relation(fields: [userId], references: [id])
+    user            User                        @relation(fields: [userId], references: [id])
 }
 
 model Personality {
