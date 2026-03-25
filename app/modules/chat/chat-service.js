@@ -54,10 +54,13 @@ async function processChat(userId, message) {
   // Step 8: Self-Evolution — update personality traits
   await evolvePersonality({ userId, emotion });
 
+  // Reload personality after evolution so snapshot reflects updated traits
+  const updatedPersonality = await getPersonality(userId);
+
   const duration = Date.now() - start;
   logger.debug({ message: "Chat pipeline done", userId, duration });
 
-  return { response, emotion, personality_snapshot: personality };
+  return { response, emotion, personality_snapshot: updatedPersonality };
 }
 
 module.exports = { processChat };
