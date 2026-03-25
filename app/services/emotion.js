@@ -16,7 +16,10 @@ async function detectEmotion(userInput) {
     logger.warn({ message: "Emotion chain returned unexpected shape", result });
     return { emotion: "neutral", confidence: 0.5 };
   } catch (err) {
-    logger.warn({ message: "Emotion detection failed, using neutral fallback", error: err.message });
+    logger.warn({
+      message: "Emotion detection failed, using neutral fallback",
+      error: err.message,
+    });
     return { emotion: "neutral", confidence: 0.5 };
   }
 }
