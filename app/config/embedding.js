@@ -13,7 +13,9 @@ class LocalEmbeddings extends Embeddings {
   async _getPipeline() {
     if (!this._pipeline) {
       const { pipeline } = await import("@huggingface/transformers");
-      this._pipeline = await pipeline("feature-extraction", MODEL);
+      this._pipeline = await pipeline("feature-extraction", MODEL, {
+        dtype: "int8",
+      });
     }
     return this._pipeline;
   }
