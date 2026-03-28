@@ -3,7 +3,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { ChatValidation } = require("./chat-validation");
-const { chatController } = require("./chat-controller");
+const { chatController, chatHistoryController } = require("./chat-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
@@ -18,6 +18,72 @@ const chatRateLimiter = rateLimit({
     message: "Terlalu banyak request. Coba lagi dalam 1 menit.",
   },
 });
+
+/**
+ * @openapi
+ * /chat:
+ *   get:
+ *     tags: [Chat]
+ *     summary: Ambil riwayat chat user
+ *     description: Mengembalikan daftar percakapan user secara terpaginasi, diurutkan dari yang terbaru.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Halaman yang ingin diambil
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Jumlah item per halaman
+ *     responses:
+ *       200:
+ *         description: Riwayat chat berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     totalPages: { type: integer }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       message: { type: string }
+ *                       response: { type: string }
+ *                       emotion: { type: object }
+ *                       createdAt: { type: string, format: date-time }
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get(
+  "/",
+  tokenVerify,
+  ChatValidation.validateGetHistory,
+  chatHistoryController,
+);
 
 /**
  * @openapi
