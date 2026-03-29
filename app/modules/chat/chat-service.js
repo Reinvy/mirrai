@@ -63,4 +63,34 @@ async function processChat(userId, message) {
   return { response, emotion, personality_snapshot: updatedPersonality };
 }
 
-module.exports = { processChat };
+async function getChatHistory(userId, { page = 1, limit = 20 } = {}) {
+  const skip = (page - 1) * limit;
+  const [total, conversations] = await Promise.all([
+    prisma.conversation.count({ where: { userId, deletedAt: null } }),
+    prisma.conversation.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        message: true,
+        response: true,
+        emotion: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  return {
+    meta: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+    data: conversations,
+  };
+}
+
+module.exports = { processChat, getChatHistory };

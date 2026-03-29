@@ -6,12 +6,9 @@ const { logger } = require("../config/logger");
 async function detectEmotion(userInput) {
   try {
     const result = await emotionChain.invoke({ userInput });
-    if (
-      result &&
-      typeof result.emotion === "string" &&
-      typeof result.confidence === "number"
-    ) {
-      return { emotion: result.emotion, confidence: result.confidence };
+    const conf = Number(result?.confidence);
+    if (result?.emotion && typeof result.emotion === "string" && !isNaN(conf)) {
+      return { emotion: result.emotion, confidence: conf };
     }
     logger.warn({ message: "Emotion chain returned unexpected shape", result });
     return { emotion: "neutral", confidence: 0.5 };

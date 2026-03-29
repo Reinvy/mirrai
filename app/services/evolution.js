@@ -1,6 +1,7 @@
 "use strict";
 
 const { prisma } = require("../config/db");
+const { logger } = require("../config/logger");
 
 // Emotion weight map: how each emotion affects each trait
 const EMOTION_WEIGHTS = {
@@ -76,6 +77,19 @@ async function evolvePersonality({ userId, emotion }) {
     confidence: clamp(personality.confidence + weights.confidence * factor),
     playfulness: clamp(personality.playfulness + weights.playfulness * factor),
   };
+
+  logger.debug({
+    message: "Evolving personality",
+    userId,
+    emotion: emotion.emotion,
+    factor,
+    diff: Object.fromEntries(
+      Object.entries(updatedData).map(([k, v]) => [
+        k,
+        +(v - personality[k]).toFixed(4),
+      ]),
+    ),
+  });
 
   const updated = await prisma.personality.update({
     where: { userId },
