@@ -12,6 +12,7 @@ const { swaggerSpec } = require("./app/config/openapi");
 const { apiReference } = require("@scalar/express-api-reference");
 const { errorHandler } = require("./app/middlewares/error-handler");
 const { AppError } = require("./app/utils/app-error");
+const { startTokenCleanupJob } = require("./app/services/token-cleanup-service");
 
 // Module routers
 const authRouter = require("./app/modules/auth/auth-router");
@@ -79,5 +80,8 @@ app.use((req, res, next) => {
 
 // Global error handler (must be last)
 app.use(errorHandler);
+
+// Start periodic token blacklist cleanup
+startTokenCleanupJob();
 
 module.exports = app;

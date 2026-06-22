@@ -15,3 +15,13 @@ jest.mock("@scalar/express-api-reference", () => ({
   apiReference: () => (req, res, next) => next(),
 }));
 
+const { prisma, pool } = require("../app/config/db");
+
+afterAll(async () => {
+  if (prisma) {
+    await prisma.$disconnect();
+  }
+  if (pool) {
+    await pool.end();
+  }
+});

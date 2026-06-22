@@ -13,14 +13,12 @@ async function processChat(userId, message) {
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId });
 
-  // Step 1: Emotion Engine
-  const emotion = await detectEmotion(message);
-
-  // Step 2: Memory Retrieval (semantic search)
-  const memories = await retrieveMemory({ userId, query: message, limit: 5 });
-
-  // Step 3: Load Personality
-  const personality = await getPersonality(userId);
+  // Step 1, 2, & 3: Run Emotion, Memory, and Personality retrieval concurrently
+  const [emotion, memories, personality] = await Promise.all([
+    detectEmotion(message),
+    retrieveMemory({ userId, query: message, limit: 5 }),
+    getPersonality(userId),
+  ]);
 
   // Step 4: Thought Engine
   const reasoning = await generateThought({

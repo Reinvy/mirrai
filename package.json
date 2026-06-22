@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
