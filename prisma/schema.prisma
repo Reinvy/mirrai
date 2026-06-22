@@ -24,17 +24,30 @@ model User {
     conversations Conversation[]
     memories      Memory[]
     personality   Personality?
+    threads       Thread[]
+}
+
+model Thread {
+    id            String         @id @default(cuid())
+    title         String         @default("Percakapan Baru")
+    userId        String
+    createdAt     DateTime       @default(now())
+    deletedAt     DateTime?
+    user          User           @relation(fields: [userId], references: [id])
+    conversations Conversation[]
 }
 
 model Conversation {
     id        String    @id @default(cuid())
     userId    String
+    threadId  String?
     message   String
     response  String
     emotion   Json
     createdAt DateTime  @default(now())
     deletedAt DateTime?
     user      User      @relation(fields: [userId], references: [id])
+    thread    Thread?   @relation(fields: [threadId], references: [id])
 }
 
 model Memory {

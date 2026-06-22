@@ -7,11 +7,21 @@ const { generateDecision } = require("../../services/decision");
 const { evolvePersonality } = require("../../services/evolution");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
+const { createThread, generateThreadTitle } = require("./thread-service");
 const { logger } = require("../../config/logger");
 
-async function processChat(userId, message) {
+async function processChat(userId, message, threadId = null) {
   const start = Date.now();
-  logger.debug({ message: "Chat pipeline start", userId });
+  logger.debug({ message: "Chat pipeline start", userId, threadId });
+
+  let activeThreadId = threadId;
+  let isNewThread = false;
+
+  if (!activeThreadId) {
+    const newThread = await createThread(userId);
+    activeThreadId = newThread.id;
+    isNewThread = true;
+  }
 
   // Step 1, 2, & 3: Run Emotion, Memory, and Personality retrieval concurrently
   const [emotion, memories, personality] = await Promise.all([
@@ -38,7 +48,13 @@ async function processChat(userId, message) {
 
   // Step 6: Save Conversation
   await prisma.conversation.create({
-    data: { userId, message: message.trim(), response, emotion },
+    data: {
+      userId,
+      threadId: activeThreadId,
+      message: message.trim(),
+      response,
+      emotion,
+    },
   });
 
   // Step 7: Save Memory (current interaction as SHORT_TERM)
@@ -55,18 +71,36 @@ async function processChat(userId, message) {
   // Reload personality after evolution so snapshot reflects updated traits
   const updatedPersonality = await getPersonality(userId);
 
+  // Trigger thread title generation in the background if it's a new thread
+  if (isNewThread) {
+    generateThreadTitle(activeThreadId, userId).catch((err) => {
+      logger.error({ message: "Error generating thread title in background", error: err.message });
+    });
+  }
+
   const duration = Date.now() - start;
   logger.debug({ message: "Chat pipeline done", userId, duration });
 
-  return { response, emotion, personality_snapshot: updatedPersonality };
+  return {
+    response,
+    emotion,
+    personality_snapshot: updatedPersonality,
+    threadId: activeThreadId,
+  };
 }
 
-async function getChatHistory(userId, { page = 1, limit = 20 } = {}) {
+async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } = {}) {
   const skip = (page - 1) * limit;
+  const whereClause = { userId, deletedAt: null };
+
+  if (threadId) {
+    whereClause.threadId = threadId;
+  }
+
   const [total, conversations] = await Promise.all([
-    prisma.conversation.count({ where: { userId, deletedAt: null } }),
+    prisma.conversation.count({ where: whereClause }),
     prisma.conversation.findMany({
-      where: { userId, deletedAt: null },
+      where: whereClause,
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
@@ -76,6 +110,7 @@ async function getChatHistory(userId, { page = 1, limit = 20 } = {}) {
         response: true,
         emotion: true,
         createdAt: true,
+        threadId: true,
       },
     }),
   ]);
@@ -92,3 +127,4 @@ async function getChatHistory(userId, { page = 1, limit = 20 } = {}) {
 }
 
 module.exports = { processChat, getChatHistory };
+

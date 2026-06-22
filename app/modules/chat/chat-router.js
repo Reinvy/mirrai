@@ -4,6 +4,12 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { ChatValidation } = require("./chat-validation");
 const { chatController, chatHistoryController } = require("./chat-controller");
+const {
+  createThreadController,
+  getThreadsController,
+  updateThreadController,
+  deleteThreadController,
+} = require("./thread-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
@@ -25,7 +31,7 @@ const chatRateLimiter = rateLimit({
  *   get:
  *     tags: [Chat]
  *     summary: Ambil riwayat chat user
- *     description: Mengembalikan daftar percakapan user secara terpaginasi, diurutkan dari yang terbaru.
+ *     description: Mengembalikan daftar percakapan user secara terpaginasi, diurutkan dari yang terbaru. Bisa difilter per threadId.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -44,6 +50,11 @@ const chatRateLimiter = rateLimit({
  *           maximum: 100
  *           default: 20
  *         description: Jumlah item per halaman
+ *       - in: query
+ *         name: threadId
+ *         schema:
+ *           type: string
+ *         description: ID thread percakapan
  *     responses:
  *       200:
  *         description: Riwayat chat berhasil diambil
@@ -70,13 +81,10 @@ const chatRateLimiter = rateLimit({
  *                       message: { type: string }
  *                       response: { type: string }
  *                       emotion: { type: object }
+ *                       threadId: { type: string }
  *                       createdAt: { type: string, format: date-time }
  *       401:
  *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
 router.get(
   "/",
@@ -92,15 +100,7 @@ router.get(
  *     tags: [Chat]
  *     summary: Kirim pesan dan dapatkan respons dari MirrAI
  *     description: |
- *       Menjalankan pipeline 8 langkah:
- *       1. Deteksi emosi
- *       2. Ambil memory relevan (semantic search)
- *       3. Load personality snapshot
- *       4. Generate internal reasoning
- *       5. Generate personalized response
- *       6. Simpan conversation
- *       7. Simpan memory baru
- *       8. Update personality (self-evolution)
+ *       Menjalankan pipeline 8 langkah dan mengasosiasikannya dengan thread percakapan.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -114,31 +114,16 @@ router.get(
  *               message:
  *                 type: string
  *                 example: Aku lagi mikirin soal masa depan nih
+ *               threadId:
+ *                 type: string
+ *                 description: Opsional. Jika kosong, thread baru akan dibuat otomatis.
  *     responses:
  *       200:
  *         description: Respons berhasil dihasilkan
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ChatResponse'
  *       400:
  *         description: Pesan kosong
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       429:
- *         description: Rate limit exceeded
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
 router.post(
   "/",
@@ -146,6 +131,109 @@ router.post(
   chatRateLimiter,
   ChatValidation.validateChat,
   chatController,
+);
+
+/**
+ * @openapi
+ * /chat/threads:
+ *   get:
+ *     tags: [Chat Threads]
+ *     summary: Ambil daftar thread percakapan milik user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Daftar thread berhasil diambil
+ */
+router.get(
+  "/threads",
+  tokenVerify,
+  getThreadsController,
+);
+
+/**
+ * @openapi
+ * /chat/threads:
+ *   post:
+ *     tags: [Chat Threads]
+ *     summary: Buat thread percakapan baru
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 default: Percakapan Baru
+ *     responses:
+ *       201:
+ *         description: Thread berhasil dibuat
+ */
+router.post(
+  "/threads",
+  tokenVerify,
+  createThreadController,
+);
+
+/**
+ * @openapi
+ * /chat/threads/{threadId}:
+ *   put:
+ *     tags: [Chat Threads]
+ *     summary: Update judul thread percakapan
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: threadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title]
+ *             properties:
+ *               title:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Judul thread berhasil diperbarui
+ */
+router.put(
+  "/threads/:threadId",
+  tokenVerify,
+  updateThreadController,
+);
+
+/**
+ * @openapi
+ * /chat/threads/{threadId}:
+ *   delete:
+ *     tags: [Chat Threads]
+ *     summary: Hapus thread percakapan beserta seluruh chat di dalamnya
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: threadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Thread berhasil dihapus
+ */
+router.delete(
+  "/threads/:threadId",
+  tokenVerify,
+  deleteThreadController,
 );
 
 module.exports = router;
