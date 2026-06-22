@@ -1,12 +1,26 @@
 "use strict";
 
-const { saveMemory, getMemoriesByUser } = require("./memory-service");
+const {
+  saveMemory,
+  getMemoriesByUser,
+  updateMemory,
+  deleteMemory,
+  retrieveMemory,
+} = require("./memory-service");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function getMemoriesController(req, res, next) {
   try {
     const userId = req.credentials.id;
-    const memories = await getMemoriesByUser(userId);
+    const { query } = req.query;
+
+    let memories;
+    if (query) {
+      memories = await retrieveMemory({ userId, query: query.trim(), limit: 20 });
+    } else {
+      memories = await getMemoriesByUser(userId);
+    }
+
     res
       .status(200)
       .json(
@@ -28,7 +42,7 @@ async function createMemoryController(req, res, next) {
       userId,
       content: content.trim(),
       type,
-      importanceScore,
+      importanceScore: importanceScore !== undefined ? Number(importanceScore) : 0.5,
     });
     res
       .status(201)
@@ -43,4 +57,53 @@ async function createMemoryController(req, res, next) {
   }
 }
 
-module.exports = { getMemoriesController, createMemoryController };
+async function updateMemoryController(req, res, next) {
+  try {
+    const userId = req.credentials.id;
+    const { memoryId } = req.params;
+    const { content, type, importanceScore } = req.body;
+
+    const memory = await updateMemory(memoryId, userId, {
+      content,
+      type,
+      importanceScore,
+    });
+
+    res
+      .status(200)
+      .json(
+        formatSuccessResponse({
+          message: "Memory berhasil diperbarui",
+          data: memory,
+        }),
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function deleteMemoryController(req, res, next) {
+  try {
+    const userId = req.credentials.id;
+    const { memoryId } = req.params;
+
+    await deleteMemory(memoryId, userId);
+
+    res
+      .status(200)
+      .json(
+        formatSuccessResponse({
+          message: "Memory berhasil dihapus",
+        }),
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  getMemoriesController,
+  createMemoryController,
+  updateMemoryController,
+  deleteMemoryController,
+};

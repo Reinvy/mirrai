@@ -5,6 +5,8 @@ const { MemoryValidation } = require("./memory-validation");
 const {
   getMemoriesController,
   createMemoryController,
+  updateMemoryController,
+  deleteMemoryController,
 } = require("./memory-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -82,6 +84,19 @@ router.post(
   tokenVerify,
   MemoryValidation.validateCreate,
   createMemoryController,
+);
+
+router.put(
+  "/:memoryId",
+  tokenVerify,
+  MemoryValidation.validateUpdate,
+  updateMemoryController,
+);
+
+router.delete(
+  "/:memoryId",
+  tokenVerify,
+  deleteMemoryController,
 );
 
 module.exports = router;

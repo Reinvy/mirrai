@@ -1,6 +1,6 @@
 "use strict";
 
-const { getPersonality } = require("./personality-service");
+const { getPersonality, updatePersonality } = require("./personality-service");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function getPersonalityController(req, res, next) {
@@ -20,4 +20,21 @@ async function getPersonalityController(req, res, next) {
   }
 }
 
-module.exports = { getPersonalityController };
+async function updatePersonalityController(req, res, next) {
+  try {
+    const userId = req.credentials.id;
+    const updated = await updatePersonality(userId, req.body);
+    res
+      .status(200)
+      .json(
+        formatSuccessResponse({
+          message: "Personality berhasil diperbarui",
+          data: updated,
+        }),
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getPersonalityController, updatePersonalityController };

@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 const { prisma } = require("../../config/db");
 const { getEmbeddings } = require("../../config/embedding");
@@ -87,4 +87,44 @@ async function getMemoriesByUser(userId) {
   });
 }
 
-module.exports = { saveMemory, retrieveMemory, getMemoriesByUser };
+async function updateMemory(memoryId, userId, { content, type, importanceScore }) {
+  const data = { type };
+  if (importanceScore !== undefined) data.importanceScore = importanceScore;
+  if (content !== undefined) data.content = content.trim();
+
+  const updated = await prisma.memory.update({
+    where: { id: memoryId, userId },
+    data,
+  });
+
+  if (content !== undefined) {
+    try {
+      const [vector] = await getEmbeddings().embedDocuments([content.trim()]);
+      const vectorStr = `[${vector.join(",")}]`;
+      await prisma.$executeRaw`
+        UPDATE "Memory"
+        SET embedding = ${vectorStr}::vector
+        WHERE id = ${memoryId}
+      `;
+    } catch (err) {
+      // Abaikan kegagalan embedding non-fatal
+    }
+  }
+
+  return updated;
+}
+
+async function deleteMemory(memoryId, userId) {
+  return prisma.memory.update({
+    where: { id: memoryId, userId },
+    data: { deletedAt: new Date() },
+  });
+}
+
+module.exports = {
+  saveMemory,
+  retrieveMemory,
+  getMemoriesByUser,
+  updateMemory,
+  deleteMemory,
+};

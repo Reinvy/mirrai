@@ -2,7 +2,10 @@
 
 const express = require("express");
 const { PersonalityValidation } = require("./personality-validation");
-const { getPersonalityController } = require("./personality-controller");
+const {
+  getPersonalityController,
+  updatePersonalityController,
+} = require("./personality-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
@@ -52,6 +55,13 @@ router.get(
   tokenVerify,
   PersonalityValidation.validateGetByUser,
   getPersonalityController,
+);
+
+router.put(
+  "/:userId",
+  tokenVerify,
+  PersonalityValidation.validateGetByUser,
+  updatePersonalityController,
 );
 
 module.exports = router;
