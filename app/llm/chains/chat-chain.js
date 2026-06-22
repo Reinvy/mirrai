@@ -1,7 +1,7 @@
-﻿"use strict";
+"use strict";
 
 const { StringOutputParser } = require("@langchain/core/output_parsers");
-const { getLlm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openai");
 const { chatPrompt } = require("../prompts/chat-prompt");
 
 let _chain = null;

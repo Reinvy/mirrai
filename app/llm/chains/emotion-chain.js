@@ -1,8 +1,8 @@
-﻿"use strict";
+"use strict";
 
 const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { RunnableLambda } = require("@langchain/core/runnables");
-const { getLlm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openai");
 const { emotionPrompt } = require("../prompts/emotion-prompt");
 
 // Extracts first JSON object from a string, handling markdown code fence wrappers
