@@ -5,6 +5,7 @@ const { PersonalityValidation } = require("./personality-validation");
 const {
   getPersonalityController,
   updatePersonalityController,
+  getPersonalityHistoryController,
 } = require("./personality-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -62,6 +63,40 @@ router.put(
   tokenVerify,
   PersonalityValidation.validateGetByUser,
   updatePersonalityController,
+);
+
+/**
+ * @openapi
+ * /personality/{userId}/history:
+ *   get:
+ *     tags: [Personality]
+ *     summary: Ambil riwayat evolusi kepribadian user
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: User ID
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *         description: Jumlah data snapshot yang ingin diambil
+ *     responses:
+ *       200:
+ *         description: Riwayat kepribadian berhasil diambil
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/:userId/history",
+  tokenVerify,
+  PersonalityValidation.validateGetByUser,
+  getPersonalityHistoryController,
 );
 
 module.exports = router;

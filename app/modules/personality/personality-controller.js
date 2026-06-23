@@ -1,6 +1,6 @@
 "use strict";
 
-const { getPersonality, updatePersonality } = require("./personality-service");
+const { getPersonality, updatePersonality, getPersonalityHistory } = require("./personality-service");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function getPersonalityController(req, res, next) {
@@ -37,4 +37,26 @@ async function updatePersonalityController(req, res, next) {
   }
 }
 
-module.exports = { getPersonalityController, updatePersonalityController };
+async function getPersonalityHistoryController(req, res, next) {
+  try {
+    const targetUserId = req.params.userId;
+    const limit = parseInt(req.query.limit, 10) || 30;
+    const history = await getPersonalityHistory(targetUserId, { limit });
+    res
+      .status(200)
+      .json(
+        formatSuccessResponse({
+          message: "Riwayat kepribadian berhasil diambil",
+          data: history,
+        }),
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  getPersonalityController,
+  updatePersonalityController,
+  getPersonalityHistoryController,
+};

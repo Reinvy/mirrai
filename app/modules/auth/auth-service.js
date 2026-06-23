@@ -4,6 +4,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { prisma } = require("../../config/db");
 const { AppError } = require("../../utils/app-error");
+const { savePersonalitySnapshot } = require("../personality/personality-service");
 
 const SALT_ROUNDS = 12;
 
@@ -25,6 +26,14 @@ async function register(name, password) {
       },
     },
     select: { id: true, name: true, createdAt: true },
+  });
+
+  await savePersonalitySnapshot(user.id, {
+    empathy: 0.5,
+    logic: 0.5,
+    humor: 0.5,
+    confidence: 0.5,
+    playfulness: 0.5,
   });
 
   return user;

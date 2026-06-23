@@ -14,7 +14,7 @@ async function getPersonality(userId) {
 }
 
 async function initPersonality(userId) {
-  return prisma.personality.create({
+  const personality = await prisma.personality.create({
     data: {
       userId,
       empathy: 0.5,
@@ -24,6 +24,8 @@ async function initPersonality(userId) {
       playfulness: 0.5,
     },
   });
+  await savePersonalitySnapshot(userId, personality);
+  return personality;
 }
 
 function clamp(val, min = 0.1, max = 1.0) {
@@ -38,7 +40,37 @@ async function updatePersonality(userId, updates) {
       data[key] = clamp(Number(updates[key]));
     }
   }
-  return prisma.personality.update({ where: { userId }, data });
+  const updated = await prisma.personality.update({ where: { userId }, data });
+  await savePersonalitySnapshot(userId, updated);
+  return updated;
 }
 
-module.exports = { getPersonality, initPersonality, updatePersonality };
+async function savePersonalitySnapshot(userId, traits) {
+  return prisma.personalityHistory.create({
+    data: {
+      userId,
+      empathy: traits.empathy,
+      logic: traits.logic,
+      humor: traits.humor,
+      confidence: traits.confidence,
+      playfulness: traits.playfulness,
+    },
+  });
+}
+
+async function getPersonalityHistory(userId, { limit = 30 } = {}) {
+  const history = await prisma.personalityHistory.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return history.reverse(); // oldest-first for easy plotting
+}
+
+module.exports = {
+  getPersonality,
+  initPersonality,
+  updatePersonality,
+  savePersonalitySnapshot,
+  getPersonalityHistory,
+};

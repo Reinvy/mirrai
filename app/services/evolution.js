@@ -2,6 +2,7 @@
 
 const { prisma } = require("../config/db");
 const { logger } = require("../config/logger");
+const { savePersonalitySnapshot } = require("../modules/personality/personality-service");
 
 // Emotion weight map: how each emotion affects each trait
 const EMOTION_WEIGHTS = {
@@ -95,6 +96,8 @@ async function evolvePersonality({ userId, emotion }) {
     where: { userId },
     data: updatedData,
   });
+
+  await savePersonalitySnapshot(userId, updated);
 
   // Bump importanceScore for emotional memories
   const emotionalTypes = ["sad", "angry", "anxious", "lonely"];

@@ -15,16 +15,17 @@ enum MemoryType {
 }
 
 model User {
-    id            String         @id @default(cuid())
-    name          String         @unique
-    password      String
-    tokenVersion  Int            @default(0)
-    createdAt     DateTime       @default(now())
-    deletedAt     DateTime?
-    conversations Conversation[]
-    memories      Memory[]
-    personality   Personality?
-    threads       Thread[]
+    id                 String               @id @default(cuid())
+    name               String               @unique
+    password           String
+    tokenVersion       Int                  @default(0)
+    createdAt          DateTime             @default(now())
+    deletedAt          DateTime?
+    conversations      Conversation[]
+    memories           Memory[]
+    personality        Personality?
+    threads            Thread[]
+    personalityHistory PersonalityHistory[]
 }
 
 model Thread {
@@ -70,6 +71,18 @@ model Personality {
     confidence  Float    @default(0.5)
     playfulness Float    @default(0.5)
     updatedAt   DateTime @updatedAt
+    user        User     @relation(fields: [userId], references: [id])
+}
+
+model PersonalityHistory {
+    id          String   @id @default(cuid())
+    userId      String
+    empathy     Float
+    logic       Float
+    humor       Float
+    confidence  Float
+    playfulness Float
+    createdAt   DateTime @default(now())
     user        User     @relation(fields: [userId], references: [id])
 }
 
