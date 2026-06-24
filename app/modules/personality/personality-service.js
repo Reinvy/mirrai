@@ -43,9 +43,18 @@ async function savePersonalitySnapshot(userId, traits) {
   });
 }
 
-async function getPersonalityHistory(userId, { limit = 30 } = {}) {
+async function getPersonalityHistory(
+  userId,
+  { limit = 30, from, to } = {},
+) {
+  const where = { userId };
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from);
+    if (to) where.createdAt.lte = new Date(to);
+  }
   const history = await prisma.personalityHistory.findMany({
-    where: { userId },
+    where,
     orderBy: { createdAt: "desc" },
     take: limit,
   });
