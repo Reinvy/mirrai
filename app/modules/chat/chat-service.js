@@ -131,21 +131,26 @@ async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } 
   };
 }
 
-async function simulateChat(userId, message) {
+async function simulateChat(userId, message, opts = {}) {
   const start = Date.now();
   logger.debug({ message: "Simulate chat start", userId });
 
   const [emotion, memories, personality] = await Promise.all([
     detectEmotion(message),
-    retrieveMemory({ userId, query: message, limit: 5 }),
+    retrieveMemorySafe({ userId, query: message, limit: 5 }),
     getPersonality(userId),
   ]);
+
+  // Apply personality override if provided (what-if mode)
+  const effectivePersonality = opts.personalityOverride
+    ? { ...personality, ...opts.personalityOverride }
+    : personality;
 
   const [reasoning, assistantResponse] = await Promise.all([
     generateThought({
       userInput: message,
       memories,
-      personality,
+      personality: effectivePersonality,
     }),
     assistantChain.invoke({
       userInput: message,
@@ -156,7 +161,7 @@ async function simulateChat(userId, message) {
     userInput: message,
     emotion,
     memories,
-    personality,
+    personality: effectivePersonality,
     reasoning,
   });
 
@@ -168,7 +173,7 @@ async function simulateChat(userId, message) {
       response,
       reasoning,
       emotion,
-      personality_snapshot: personality,
+      personality_snapshot: effectivePersonality,
     },
     assistant: {
       response: assistantResponse,

@@ -42,8 +42,8 @@ async function chatHistoryController(req, res, next) {
 async function playgroundController(req, res, next) {
   try {
     const userId = req.credentials.id;
-    const { message } = req.body;
-    const result = await simulateChat(userId, message);
+    const { message, personalityOverride } = req.body;
+    const result = await simulateChat(userId, message, { personalityOverride });
     res.status(200).json(
       formatSuccessResponse({
         message: "Simulasi berhasil diselesaikan",
