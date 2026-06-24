@@ -7,6 +7,9 @@ const {
   loginController,
   logoutController,
   meController,
+  changePasswordController,
+  deleteAccountController,
+  exportAccountController,
 } = require("./auth-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -127,5 +130,60 @@ router.post("/logout", tokenVerify, logoutController);
  *               $ref: '#/components/schemas/Error'
  */
 router.get("/me", tokenVerify, meController);
+
+/**
+ * @openapi
+ * /auth/password:
+ *   put:
+ *     tags: [Auth]
+ *     summary: Ubah password (akan invalidate semua token lain)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [oldPassword, newPassword]
+ *             properties:
+ *               oldPassword: { type: string }
+ *               newPassword: { type: string, minLength: 8 }
+ *     responses:
+ *       200: { description: Password berhasil diubah }
+ *       401: { description: Password lama salah }
+ */
+router.put("/password", tokenVerify, changePasswordController);
+
+/**
+ * @openapi
+ * /auth/me:
+ *   delete:
+ *     tags: [Auth]
+ *     summary: Hapus akun (soft delete + cascade)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Akun dihapus }
+ */
+router.delete("/me", tokenVerify, deleteAccountController);
+
+/**
+ * @openapi
+ * /auth/me/export:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Export semua data user sebagai JSON
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: JSON dump
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ */
+router.get("/me/export", tokenVerify, exportAccountController);
 
 module.exports = router;

@@ -1,7 +1,14 @@
 "use strict";
 
 const { prisma } = require("../../config/db");
-const { register, login, logout } = require("./auth-service");
+const {
+  register,
+  login,
+  logout,
+  changePassword,
+  deleteAccount,
+  exportUserData,
+} = require("./auth-service");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function registerController(req, res, next) {
@@ -61,9 +68,76 @@ async function meController(req, res, next) {
   }
 }
 
+async function changePasswordController(req, res, next) {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || typeof oldPassword !== "string") {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Password lama harus diisi" });
+    }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Password baru minimal 8 karakter" });
+    }
+    if (newPassword.length > 128) {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Password baru terlalu panjang" });
+    }
+    const result = await changePassword(
+      req.credentials.id,
+      oldPassword,
+      newPassword,
+    );
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: result.message, data: null }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function deleteAccountController(req, res, next) {
+  try {
+    await deleteAccount(req.credentials.id);
+    res
+      .status(200)
+      .json(
+        formatSuccessResponse({
+          message: "Akun berhasil dihapus",
+          data: null,
+        }),
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function exportAccountController(req, res, next) {
+  try {
+    const data = await exportUserData(req.credentials.id);
+    const filename = `mirrai-export-${data.user?.id || "user"}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`,
+    );
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.status(200).send(JSON.stringify(data, null, 2));
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   registerController,
   loginController,
   logoutController,
   meController,
+  changePasswordController,
+  deleteAccountController,
+  exportAccountController,
 };
