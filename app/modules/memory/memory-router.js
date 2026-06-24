@@ -8,6 +8,7 @@ const {
   updateMemoryController,
   deleteMemoryController,
   memoryInsightsController,
+  memoryGraphController,
 } = require("./memory-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
@@ -53,6 +54,27 @@ router.get("/me", tokenVerify, getMemoriesController);
  *       200: { description: Memory insights }
  */
 router.get("/insights", tokenVerify, memoryInsightsController);
+
+/**
+ * @openapi
+ * /memory/graph:
+ *   get:
+ *     tags: [Memory]
+ *     summary: Graph memori berdasarkan embedding similarity
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50, maximum: 200 }
+ *       - in: query
+ *         name: threshold
+ *         schema: { type: number, default: 0.75, minimum: 0.5, maximum: 0.99 }
+ *     responses:
+ *       "200":
+ *         description: nodes + edges
+ */
+router.get("/graph", tokenVerify, memoryGraphController);
 
 router.get("/:userId", tokenVerify, getMemoriesController);
 

@@ -278,4 +278,113 @@ module.exports = {
   getMemoryInsights,
   getPersonalityInsights,
   getMoodTimeline,
+  getMemoryGraph,
 };
+
+/**
+ * Build a graph of memories based on embedding similarity.
+ * For each memory, find its K nearest neighbors and emit edges.
+ * Result: { nodes: [{id, content, type, importanceScore}], edges: [{source, target, weight}] }
+ */
+async function getMemoryGraph(userId, options = {}) {
+  const { limit = 50, similarityThreshold = 0.75, maxNeighbors = 5 } = options;
+  const memories = await prisma.memory.findMany({
+    where: { userId, deletedAt: null },
+    orderBy: { importanceScore: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      content: true,
+      type: true,
+      importanceScore: true,
+      createdAt: true,
+    },
+  });
+
+  if (memories.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  // Get all vectors via raw SQL
+  const vectors = await prisma.$queryRaw`
+    SELECT id, embedding::text as embedding
+    FROM "Memory"
+    WHERE "userId" = ${userId}
+      AND "deletedAt" IS NULL
+      AND embedding IS NOT NULL
+      AND id = ANY(${memories.map((m) => m.id)})
+  `;
+
+  const vectorMap = new Map();
+  for (const v of vectors) {
+    if (!v.embedding) continue;
+    const arr = parsePgVector(v.embedding);
+    if (arr) vectorMap.set(v.id, arr);
+  }
+
+  // Compute pairwise similarity
+  const edges = [];
+  const validMemories = memories.filter((m) => vectorMap.has(m.id));
+  for (let i = 0; i < validMemories.length; i++) {
+    const a = validMemories[i];
+    const aVec = vectorMap.get(a.id);
+    const similarities = [];
+    for (let j = i + 1; j < validMemories.length; j++) {
+      const b = validMemories[j];
+      const bVec = vectorMap.get(b.id);
+      const sim = cosineSimilarity(aVec, bVec);
+      if (sim >= similarityThreshold) {
+        edges.push({
+          source: a.id,
+          target: b.id,
+          weight: Math.round(sim * 100) / 100,
+        });
+        similarities.push({ id: b.id, sim });
+      }
+    }
+    // Limit to top K neighbors per node
+    similarities.sort((a, b) => b.sim - a.sim);
+    if (similarities.length > maxNeighbors) {
+      const allowed = new Set(
+        similarities.slice(0, maxNeighbors).map((s) => s.id),
+      );
+      // Remove excess edges
+      for (let k = edges.length - 1; k >= 0; k--) {
+        if (edges[k].source === a.id && !allowed.has(edges[k].target)) {
+          edges.splice(k, 1);
+        }
+      }
+    }
+  }
+
+  return {
+    nodes: memories.map((m) => ({
+      id: m.id,
+      content: m.content,
+      type: m.type,
+      importanceScore: m.importanceScore,
+      hasVector: vectorMap.has(m.id),
+    })),
+    edges,
+  };
+}
+
+function parsePgVector(text) {
+  if (typeof text !== "string") return null;
+  const match = text.match(/^\[([^\]]+)\]$/);
+  if (!match) return null;
+  return match[1].split(",").map((n) => parseFloat(n));
+}
+
+function cosineSimilarity(a, b) {
+  if (a.length !== b.length) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
+}

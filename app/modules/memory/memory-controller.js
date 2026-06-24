@@ -7,7 +7,10 @@ const {
   deleteMemory,
   retrieveMemory,
 } = require("./memory-service");
-const { getMemoryInsights } = require("../../services/insights");
+const {
+  getMemoryInsights,
+  getMemoryGraph,
+} = require("../../services/insights");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function getMemoriesController(req, res, next) {
@@ -113,10 +116,27 @@ async function memoryInsightsController(req, res, next) {
   }
 }
 
+async function memoryGraphController(req, res, next) {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const threshold = parseFloat(req.query.threshold) || 0.75;
+    const data = await getMemoryGraph(req.credentials.id, {
+      limit,
+      similarityThreshold: threshold,
+    });
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: "Memory graph", data }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getMemoriesController,
   createMemoryController,
   updateMemoryController,
   deleteMemoryController,
   memoryInsightsController,
+  memoryGraphController,
 };
