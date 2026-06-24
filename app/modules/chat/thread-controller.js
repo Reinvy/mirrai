@@ -5,6 +5,8 @@ const {
   getThreadsByUser,
   updateThread,
   deleteThread,
+  shareThread,
+  unshareThread,
 } = require("./thread-service");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
@@ -71,9 +73,43 @@ async function deleteThreadController(req, res, next) {
   }
 }
 
+async function shareThreadController(req, res, next) {
+  try {
+    const userId = req.credentials.id;
+    const { threadId } = req.params;
+    const thread = await shareThread(threadId, userId);
+    res
+      .status(200)
+      .json(
+        formatSuccessResponse({
+          message: "Thread sekarang publik",
+          data: { ...thread, shareUrl: `/shared/${thread.shareSlug}` },
+        }),
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function unshareThreadController(req, res, next) {
+  try {
+    const userId = req.credentials.id;
+    const { threadId } = req.params;
+    const thread = await unshareThread(threadId, userId);
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: "Thread unpublished", data: thread }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createThreadController,
   getThreadsController,
   updateThreadController,
   deleteThreadController,
+  shareThreadController,
+  unshareThreadController,
 };
+

@@ -15,7 +15,15 @@ const {
   getThreadsController,
   updateThreadController,
   deleteThreadController,
+  shareThreadController,
+  unshareThreadController,
 } = require("./thread-controller");
+const {
+  getPublicProfileController,
+  getPublicThreadsController,
+  getSharedThreadController,
+  compareController,
+} = require("./public-controller");
 const {
   chatInsightsController,
   moodTimelineController,
@@ -391,6 +399,50 @@ router.delete(
   tokenVerify,
   threadRateLimiter,
   deleteThreadController,
+);
+
+/**
+ * @openapi
+ * /chat/threads/{threadId}/share:
+ *   post:
+ *     tags: [Chat Threads]
+ *     summary: Buat thread menjadi publik (generate share link)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: threadId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Thread published }
+ */
+router.post(
+  "/threads/:threadId/share",
+  tokenVerify,
+  shareThreadController,
+);
+
+/**
+ * @openapi
+ * /chat/threads/{threadId}/share:
+ *   delete:
+ *     tags: [Chat Threads]
+ *     summary: Unpublish thread
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: threadId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Unpublished }
+ */
+router.delete(
+  "/threads/:threadId/share",
+  tokenVerify,
+  unshareThreadController,
 );
 
 /**

@@ -19,6 +19,8 @@ model User {
     name               String               @unique
     password           String
     tokenVersion       Int                  @default(0)
+    bio                String?
+    isPublicProfile    Boolean              @default(false)
     createdAt          DateTime             @default(now())
     deletedAt          DateTime?
     conversations      Conversation[]
@@ -32,6 +34,8 @@ model Thread {
     id            String         @id @default(cuid())
     title         String         @default("Percakapan Baru")
     userId        String
+    isPublic      Boolean        @default(false)
+    shareSlug     String?        @unique
     createdAt     DateTime       @default(now())
     deletedAt     DateTime?
     user          User           @relation(fields: [userId], references: [id])

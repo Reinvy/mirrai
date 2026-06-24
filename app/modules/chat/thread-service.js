@@ -64,6 +64,74 @@ async function updateThread(threadId, userId, { title }) {
   });
 }
 
+function generateShareSlug() {
+  // 16 chars, URL-safe
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let slug = "";
+  for (let i = 0; i < 16; i++) {
+    slug += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return slug;
+}
+
+async function shareThread(threadId, userId) {
+  // Verify ownership
+  const thread = await prisma.thread.findFirst({
+    where: { id: threadId, userId, deletedAt: null },
+  });
+  if (!thread) {
+    throw new AppError(404, "Thread tidak ditemukan");
+  }
+  // Reuse slug if already public
+  let slug = thread.shareSlug;
+  if (!slug) {
+    slug = generateShareSlug();
+  }
+  const updated = await prisma.thread.update({
+    where: { id: threadId },
+    data: { isPublic: true, shareSlug: slug },
+  });
+  return updated;
+}
+
+async function unshareThread(threadId, userId) {
+  const thread = await prisma.thread.findFirst({
+    where: { id: threadId, userId, deletedAt: null },
+  });
+  if (!thread) {
+    throw new AppError(404, "Thread tidak ditemukan");
+  }
+  return prisma.thread.update({
+    where: { id: threadId },
+    data: { isPublic: false, shareSlug: null },
+  });
+}
+
+async function getSharedThread(slug) {
+  const thread = await prisma.thread.findFirst({
+    where: { shareSlug: slug, isPublic: true, deletedAt: null },
+    include: {
+      conversations: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          message: true,
+          response: true,
+          emotion: true,
+          createdAt: true,
+        },
+      },
+      user: {
+        select: { name: true, isPublicProfile: true, bio: true },
+      },
+    },
+  });
+  if (!thread) return null;
+  return thread;
+}
+
 async function deleteThread(threadId, userId) {
   // Verify ownership
   const thread = await prisma.thread.findFirst({
@@ -160,4 +228,7 @@ module.exports = {
   updateThread,
   deleteThread,
   generateThreadTitle,
+  shareThread,
+  unshareThread,
+  getSharedThread,
 };
