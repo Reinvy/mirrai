@@ -59,6 +59,7 @@ model Memory {
     embedding       Unsupported("vector(768)")?
     importanceScore Float                       @default(0.5)
     type            MemoryType
+    lastUsedAt      DateTime?
     createdAt       DateTime                    @default(now())
     deletedAt       DateTime?
     user            User                        @relation(fields: [userId], references: [id])

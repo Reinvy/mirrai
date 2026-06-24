@@ -115,4 +115,28 @@ router.delete(
   deleteMemoryController,
 );
 
+/**
+ * @openapi
+ * /memory/tune:
+ *   post:
+ *     tags: [Memory]
+ *     summary: Trigger memory importance auto-tune (manual)
+ *     description: Biasanya jalan weekly via background job. Endpoint ini untuk manual trigger.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Result }
+ */
+router.post("/tune", tokenVerify, async (req, res, next) => {
+  try {
+    const { tuneMemoryImportanceForUser } = require("../../services/memory-tuning");
+    const result = await tuneMemoryImportanceForUser(req.credentials.id);
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: "Memory tuning selesai", data: result }));
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

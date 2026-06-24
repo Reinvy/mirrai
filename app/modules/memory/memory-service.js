@@ -2,6 +2,7 @@
 
 const { prisma } = require("../../config/db");
 const { getEmbeddings } = require("../../config/embedding");
+const { bumpMemoryUsage } = require("../../services/memory-tuning");
 
 async function saveMemory({ userId, content, type, importanceScore = 0.5 }) {
   // Create memory record
@@ -19,7 +20,7 @@ async function saveMemory({ userId, content, type, importanceScore = 0.5 }) {
       WHERE id = ${memory.id}
     `;
   } catch {
-    // Embedding failure is non-fatal â€” memory is saved without vector
+    // Embedding failure is non-fatal — memory is saved without vector
   }
 
   return memory;
@@ -28,7 +29,7 @@ async function saveMemory({ userId, content, type, importanceScore = 0.5 }) {
 async function retrieveMemory({ userId, query, limit = 5 }) {
   // If no query, return recent memories by importance
   if (!query) {
-    return prisma.memory.findMany({
+    const memories = await prisma.memory.findMany({
       where: { userId, deletedAt: null },
       orderBy: [{ importanceScore: "desc" }, { createdAt: "desc" }],
       take: limit,
@@ -40,13 +41,16 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
         createdAt: true,
       },
     });
+    bumpMemoryUsage(memories.map((m) => m.id)).catch(() => {});
+    return memories;
   }
 
+  let memories;
   try {
     const [queryVector] = await getEmbeddings().embedDocuments([query]);
     const vectorStr = `[${queryVector.join(",")}]`;
 
-    const memories = await prisma.$queryRaw`
+    memories = await prisma.$queryRaw`
       SELECT id, content, type, "importanceScore", "createdAt"
       FROM "Memory"
       WHERE "userId" = ${userId}
@@ -55,10 +59,9 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
       ORDER BY embedding <=> ${vectorStr}::vector
       LIMIT ${limit}
     `;
-    return memories;
   } catch {
     // Fallback to recency-based retrieval if vector search fails
-    return prisma.memory.findMany({
+    memories = await prisma.memory.findMany({
       where: { userId, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -71,6 +74,8 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
       },
     });
   }
+  bumpMemoryUsage(memories.map((m) => m.id)).catch(() => {});
+  return memories;
 }
 
 async function getMemoriesByUser(userId) {

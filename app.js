@@ -14,6 +14,7 @@ const { apiReference } = require("@scalar/express-api-reference");
 const { errorHandler } = require("./app/middlewares/error-handler");
 const { AppError } = require("./app/utils/app-error");
 const { startTokenCleanupJob } = require("./app/services/token-cleanup-service");
+const { startMemoryTuningJob } = require("./app/services/memory-tuning");
 
 // Module routers
 const authRouter = require("./app/modules/auth/auth-router");
@@ -120,5 +121,8 @@ app.use(errorHandler);
 
 // Start periodic token blacklist cleanup
 startTokenCleanupJob();
+
+// Start periodic memory importance tuning
+startMemoryTuningJob();
 
 module.exports = app;
