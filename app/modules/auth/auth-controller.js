@@ -53,7 +53,13 @@ async function meController(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.credentials.id },
-      select: { id: true, name: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        bio: true,
+        isPublicProfile: true,
+        createdAt: true,
+      },
     });
     if (!user) {
       return res
@@ -132,6 +138,45 @@ async function exportAccountController(req, res, next) {
   }
 }
 
+async function updateProfileController(req, res, next) {
+  try {
+    const { isPublicProfile, bio } = req.body;
+    const update = {};
+    if (typeof isPublicProfile === "boolean") {
+      update.isPublicProfile = isPublicProfile;
+    }
+    if (bio !== undefined) {
+      if (typeof bio !== "string") {
+        return res
+          .status(400)
+          .json({ status: "error", message: "Bio harus berupa string" });
+      }
+      if (bio.length > 280) {
+        return res
+          .status(400)
+          .json({ status: "error", message: "Bio terlalu panjang (maks 280)" });
+      }
+      update.bio = bio;
+    }
+    const user = await prisma.user.update({
+      where: { id: req.credentials.id },
+      data: update,
+      select: {
+        id: true,
+        name: true,
+        bio: true,
+        isPublicProfile: true,
+        createdAt: true,
+      },
+    });
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: "Profile updated", data: user }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   registerController,
   loginController,
@@ -140,4 +185,5 @@ module.exports = {
   changePasswordController,
   deleteAccountController,
   exportAccountController,
+  updateProfileController,
 };

@@ -10,6 +10,7 @@ const {
   changePasswordController,
   deleteAccountController,
   exportAccountController,
+  updateProfileController,
 } = require("./auth-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -185,5 +186,26 @@ router.delete("/me", tokenVerify, deleteAccountController);
  *               type: object
  */
 router.get("/me/export", tokenVerify, exportAccountController);
+
+/**
+ * @openapi
+ * /auth/me/profile:
+ *   put:
+ *     tags: [Auth]
+ *     summary: Update bio & public profile flag
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               isPublicProfile: { type: boolean }
+ *               bio: { type: string, maxLength: 280 }
+ *     responses:
+ *       200: { description: Profile updated }
+ */
+router.put("/me/profile", tokenVerify, updateProfileController);
 
 module.exports = router;
