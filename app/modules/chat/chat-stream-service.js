@@ -26,6 +26,15 @@ async function* processChatStream(userId, message, threadId = null, attachments 
   const start = Date.now();
   logger.debug({ message: "Chat stream pipeline start", userId, threadId });
 
+  // Check quota (free tier 50/day)
+  const { checkAndIncrementQuota } = require("../../services/quota");
+  try {
+    await checkAndIncrementQuota(userId);
+  } catch (err) {
+    yield JSON.stringify({ event: "error", message: err.message });
+    return;
+  }
+
   let activeThreadId = threadId;
   let isNewThread = false;
 

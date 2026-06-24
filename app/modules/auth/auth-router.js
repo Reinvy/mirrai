@@ -12,6 +12,10 @@ const {
   exportAccountController,
   updateProfileController,
 } = require("./auth-controller");
+const {
+  getMyQuotaController,
+  upgradeToProController,
+} = require("./quota-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
@@ -207,5 +211,35 @@ router.get("/me/export", tokenVerify, exportAccountController);
  *       200: { description: Profile updated }
  */
 router.put("/me/profile", tokenVerify, updateProfileController);
+
+/**
+ * @openapi
+ * "/auth/me/quota":
+ *   get:
+ *     tags:
+ *       - Auth
+ *     summary: Cek daily chat quota
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       "200":
+ *         description: Quota status
+ */
+router.get("/me/quota", tokenVerify, getMyQuotaController);
+
+/**
+ * @openapi
+ * "/auth/me/upgrade":
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Upgrade to Pro
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       "200":
+ *         description: Upgraded
+ */
+router.post("/me/upgrade", tokenVerify, upgradeToProController);
 
 module.exports = router;

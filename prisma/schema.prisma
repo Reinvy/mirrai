@@ -21,6 +21,9 @@ model User {
     tokenVersion       Int                  @default(0)
     bio                String?
     isPublicProfile    Boolean              @default(false)
+    tier               String               @default("free")
+    dailyChatCount     Int                  @default(0)
+    dailyCountDate     DateTime?
     createdAt          DateTime             @default(now())
     deletedAt          DateTime?
     conversations      Conversation[]
