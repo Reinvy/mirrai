@@ -110,34 +110,74 @@ mirrai/
 
 Lihat Scalar UI di `http://localhost:3000/docs` untuk dokumentasi lengkap dengan schema dan contoh.
 
+### Auth
+
 | Method | Path | Auth | Rate Limit | Catatan |
 | ------ | ---- | :--: | :--------: | ------- |
 | POST | `/api/auth/register` |   | 20/15min | min pw 8 char |
 | POST | `/api/auth/login` |   | 20/15min | |
 | POST | `/api/auth/logout` | ✅ | 20/15min | blacklist token |
 | GET  | `/api/auth/me` | ✅ | 120/min | |
+| PUT  | `/api/auth/me/profile` | ✅ | 30/min | update bio + public flag |
 | PUT  | `/api/auth/password` | ✅ | 20/15min | invalidate all tokens user |
 | DELETE | `/api/auth/me` | ✅ | 20/15min | soft-delete cascade |
 | GET  | `/api/auth/me/export` | ✅ | 120/min | download JSON dump |
+
+### Memory
+
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
 | GET  | `/api/memory/me` | ✅ | 120/min | list my memories |
 | GET  | `/api/memory/insights` | ✅ | 120/min | stats by type, top important |
 | POST | `/api/memory` | ✅ | 30/min | |
 | PUT  | `/api/memory/:id` | ✅ | 30/min | |
 | DELETE | `/api/memory/:id` | ✅ | 30/min | |
+| POST | `/api/memory/tune` | ✅ | 30/min | manual trigger auto-tune |
+
+### Personality
+
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
 | GET  | `/api/personality/me` | ✅ | 120/min | |
 | PUT  | `/api/personality/me` | ✅ | 30/min | |
 | POST | `/api/personality/me/reset` | ✅ | 30/min | reset to 0.5 |
 | GET  | `/api/personality/me/history` | ✅ | 120/min | ?from=&to= date filter |
 | GET  | `/api/personality/me/insights` | ✅ | 120/min | trend 7 hari + LLM summary |
+
+### Chat
+
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
 | GET  | `/api/chat` | ✅ | 120/min | paginated history |
 | POST | `/api/chat` | ✅ | 10/min | 8-step pipeline |
 | POST | `/api/chat/stream` | ✅ | 10/min | **SSE streaming** |
 | POST | `/api/chat/playground` | ✅ | 10/min | ephemeral twin vs assistant |
 | GET  | `/api/chat/insights` | ✅ | 120/min | daily activity, top emotions |
+| GET  | `/api/chat/mood-timeline` | ✅ | 120/min | ?days=7\|30\|90 emotion timeline |
+| GET  | `/api/chat/recap` | ✅ | 120/min | ?days=7\|30\|90 LLM summary |
 | GET  | `/api/chat/:id` | ✅ | 120/min | single conversation |
-| CRUD | `/api/chat/threads` | ✅ | 60/min | |
-| GET  | `/api-docs.json` |   | — | OpenAPI spec |
-| GET  | `/docs` |   | — | Scalar UI |
+| POST | `/api/chat/threads` | ✅ | 60/min | create thread |
+| GET  | `/api/chat/threads` | ✅ | 60/min | list my threads |
+| PUT  | `/api/chat/threads/:id` | ✅ | 60/min | rename |
+| DELETE | `/api/chat/threads/:id` | ✅ | 60/min | delete + cascade |
+| POST | `/api/chat/threads/:id/share` | ✅ | 60/min | publish thread (generate slug) |
+| DELETE | `/api/chat/threads/:id/share` | ✅ | 60/min | unpublish |
+
+### Public (no auth)
+
+| Method | Path | Auth | Catatan |
+| ------ | ---- | :--: | ------- |
+| GET  | `/api/chat/shared/:slug` |   | read shared thread |
+| GET  | `/api/chat/users/:username` |   | public profile (if enabled) |
+| GET  | `/api/chat/users/:username/threads` |   | public threads list |
+| GET  | `/api/chat/compare?u1=&u2=` |   | compare 2 public profiles |
+
+### Docs
+
+| Method | Path | Auth | Catatan |
+| ------ | ---- | :--: | ------- |
+| GET  | `/api-docs.json` |   | OpenAPI spec |
+| GET  | `/docs` |   | Scalar UI |
 
 > `/me` adalah alias untuk endpoint yang ignore path `:userId` dan pakai user dari JWT.
 
