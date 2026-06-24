@@ -1,6 +1,6 @@
 "use strict";
 
-const { chatChain } = require("../llm/chains/chat-chain");
+const { chatChain, streamChat } = require("../llm/chains/chat-chain");
 
 function formatPersonality(personality) {
   return Object.entries(personality)
@@ -35,4 +35,20 @@ async function generateDecision({
   return response;
 }
 
-module.exports = { generateDecision };
+function streamDecision({
+  userInput,
+  emotion,
+  memories,
+  personality,
+  reasoning,
+}) {
+  return streamChat({
+    userInput,
+    emotion: `${emotion.emotion} (confidence: ${emotion.confidence})`,
+    personality: formatPersonality(personality),
+    memories: formatMemories(memories),
+    reasoning,
+  });
+}
+
+module.exports = { generateDecision, streamDecision };

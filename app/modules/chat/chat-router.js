@@ -4,6 +4,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { ChatValidation } = require("./chat-validation");
 const { chatController, chatHistoryController, playgroundController } = require("./chat-controller");
+const { chatStreamController } = require("./chat-stream-controller");
 const {
   createThreadController,
   getThreadsController,
@@ -178,6 +179,53 @@ router.post(
   chatRateLimiter,
   ChatValidation.validateChat,
   playgroundController,
+);
+
+/**
+ * @openapi
+ * /chat/stream:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Kirim pesan dengan streaming response (Server-Sent Events)
+ *     description: |
+ *       Sama seperti POST /chat, tapi response di-stream per token via SSE.
+ *       Event sequence: meta → reasoning → delta* → done
+ *       Setiap event: `data: {json}\n\n`
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message]
+ *             properties:
+ *               message:
+ *                 type: string
+ *               threadId:
+ *                 type: string
+ *                 description: Opsional. Jika kosong, thread baru dibuat otomatis.
+ *     responses:
+ *       200:
+ *         description: Stream terbuka
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *       400:
+ *         description: Pesan kosong
+ *       401:
+ *         description: Unauthorized
+ *       429:
+ *         description: Rate limit
+ */
+router.post(
+  "/stream",
+  tokenVerify,
+  chatRateLimiter,
+  ChatValidation.validateChat,
+  chatStreamController,
 );
 
 /**
