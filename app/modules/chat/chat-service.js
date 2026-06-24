@@ -181,5 +181,15 @@ async function simulateChat(userId, message, opts = {}) {
   };
 }
 
+async function retrieveMemorySafe(args) {
+  try {
+    const { retrieveMemory } = require("../memory/memory-service");
+    return await retrieveMemory(args);
+  } catch (err) {
+    logger.error({ message: "Memory retrieval failed", error: err.message });
+    return [];
+  }
+}
+
 module.exports = { processChat, getChatHistory, simulateChat };
 

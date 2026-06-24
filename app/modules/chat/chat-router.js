@@ -20,6 +20,7 @@ const {
   chatInsightsController,
   moodTimelineController,
 } = require("./insights-controller");
+const { recapController } = require("./recap-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
@@ -267,6 +268,23 @@ router.get("/insights", tokenVerify, chatInsightsController);
  *       200: { description: Mood timeline }
  */
 router.get("/mood-timeline", tokenVerify, moodTimelineController);
+
+/**
+ * @openapi
+ * /chat/recap:
+ *   get:
+ *     tags: [Chat]
+ *     summary: Recap percakapan (LLM-generated summary)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema: { type: integer, enum: [7, 30, 90], default: 7 }
+ *     responses:
+ *       200: { description: Recap generated }
+ */
+router.get("/recap", tokenVerify, recapController);
 
 /**
  * @openapi
