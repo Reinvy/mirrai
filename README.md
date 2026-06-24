@@ -110,27 +110,51 @@ mirrai/
 
 Lihat Scalar UI di `http://localhost:3000/docs` untuk dokumentasi lengkap dengan schema dan contoh.
 
-| Method | Path | Auth | Rate Limit |
-| ------ | ---- | :--: | :--------: |
-| POST | `/api/auth/register` |   | 20/15min |
-| POST | `/api/auth/login` |   | 20/15min |
-| POST | `/api/auth/logout` | ✅ | 20/15min |
-| GET  | `/api/auth/me` | ✅ | 120/min |
-| GET  | `/api/memory/me` | ✅ | 120/min |
-| POST | `/api/memory` | ✅ | 30/min |
-| PUT  | `/api/memory/:id` | ✅ | 30/min |
-| DELETE | `/api/memory/:id` | ✅ | 30/min |
-| GET  | `/api/personality/me` | ✅ | 120/min |
-| PUT  | `/api/personality/me` | ✅ | 30/min |
-| GET  | `/api/personality/me/history` | ✅ | 120/min |
-| GET  | `/api/chat` | ✅ | 120/min |
-| POST | `/api/chat` | ✅ | 10/min |
-| POST | `/api/chat/playground` | ✅ | 10/min |
-| CRUD | `/api/chat/threads` | ✅ | 60/min |
-| GET  | `/api-docs.json` |   | — |
-| GET  | `/docs` |   | — |
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
+| POST | `/api/auth/register` |   | 20/15min | min pw 8 char |
+| POST | `/api/auth/login` |   | 20/15min | |
+| POST | `/api/auth/logout` | ✅ | 20/15min | blacklist token |
+| GET  | `/api/auth/me` | ✅ | 120/min | |
+| PUT  | `/api/auth/password` | ✅ | 20/15min | invalidate all tokens user |
+| DELETE | `/api/auth/me` | ✅ | 20/15min | soft-delete cascade |
+| GET  | `/api/auth/me/export` | ✅ | 120/min | download JSON dump |
+| GET  | `/api/memory/me` | ✅ | 120/min | list my memories |
+| GET  | `/api/memory/insights` | ✅ | 120/min | stats by type, top important |
+| POST | `/api/memory` | ✅ | 30/min | |
+| PUT  | `/api/memory/:id` | ✅ | 30/min | |
+| DELETE | `/api/memory/:id` | ✅ | 30/min | |
+| GET  | `/api/personality/me` | ✅ | 120/min | |
+| PUT  | `/api/personality/me` | ✅ | 30/min | |
+| POST | `/api/personality/me/reset` | ✅ | 30/min | reset to 0.5 |
+| GET  | `/api/personality/me/history` | ✅ | 120/min | ?from=&to= date filter |
+| GET  | `/api/personality/me/insights` | ✅ | 120/min | trend 7 hari + LLM summary |
+| GET  | `/api/chat` | ✅ | 120/min | paginated history |
+| POST | `/api/chat` | ✅ | 10/min | 8-step pipeline |
+| POST | `/api/chat/stream` | ✅ | 10/min | **SSE streaming** |
+| POST | `/api/chat/playground` | ✅ | 10/min | ephemeral twin vs assistant |
+| GET  | `/api/chat/insights` | ✅ | 120/min | daily activity, top emotions |
+| GET  | `/api/chat/:id` | ✅ | 120/min | single conversation |
+| CRUD | `/api/chat/threads` | ✅ | 60/min | |
+| GET  | `/api-docs.json` |   | — | OpenAPI spec |
+| GET  | `/docs` |   | — | Scalar UI |
 
 > `/me` adalah alias untuk endpoint yang ignore path `:userId` dan pakai user dari JWT.
+
+### SSE Streaming format
+
+`POST /api/chat/stream` mengembalikan Server-Sent Events. Setiap event dipisahkan `\n\n`:
+
+```
+data: {"event":"meta","threadId":"...","emotion":{"emotion":"happy","confidence":0.8}}\n\n
+data: {"event":"reasoning","reasoning":"..."}\n\n
+data: {"event":"delta","text":"Halo"}\n\n
+data: {"event":"delta","text":", "}\n\n
+data: {"event":"delta","text":"user!"}\n\n
+data: {"event":"done","response":"Halo, user!","reasoning":"...","emotion":{...},"personality_snapshot":{...},"threadId":"..."}\n\n
+```
+
+Client dapat menutup stream dengan `AbortController`. Conversation baru hanya disimpan setelah event `done`.
 
 ## Deployment
 
