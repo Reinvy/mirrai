@@ -37,6 +37,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
+router.get("/me", tokenVerify, getMemoriesController);
 router.get("/:userId", tokenVerify, getMemoriesController);
 
 /**
