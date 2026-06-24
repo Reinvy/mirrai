@@ -7,6 +7,7 @@ const {
   createMemoryController,
   updateMemoryController,
   deleteMemoryController,
+  memoryInsightsController,
 } = require("./memory-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -99,5 +100,18 @@ router.delete(
   tokenVerify,
   deleteMemoryController,
 );
+
+/**
+ * @openapi
+ * /memory/insights:
+ *   get:
+ *     tags: [Memory]
+ *     summary: Statistik memories (count by type, top important, dll)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Memory insights }
+ */
+router.get("/insights", tokenVerify, memoryInsightsController);
 
 module.exports = router;

@@ -7,6 +7,7 @@ const {
   deleteMemory,
   retrieveMemory,
 } = require("./memory-service");
+const { getMemoryInsights } = require("../../services/insights");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function getMemoriesController(req, res, next) {
@@ -101,9 +102,21 @@ async function deleteMemoryController(req, res, next) {
   }
 }
 
+async function memoryInsightsController(req, res, next) {
+  try {
+    const data = await getMemoryInsights(req.credentials.id);
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: "Memory insights", data }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getMemoriesController,
   createMemoryController,
   updateMemoryController,
   deleteMemoryController,
+  memoryInsightsController,
 };

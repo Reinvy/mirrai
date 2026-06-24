@@ -11,6 +11,9 @@ const {
   updateThreadController,
   deleteThreadController,
 } = require("./thread-controller");
+const {
+  chatInsightsController,
+} = require("./insights-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
@@ -227,6 +230,20 @@ router.post(
   ChatValidation.validateChat,
   chatStreamController,
 );
+
+/**
+ * @openapi
+ * /chat/insights:
+ *   get:
+ *     tags: [Chat]
+ *     summary: Statistik & ringkasan chat user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Insights berhasil diambil
+ */
+router.get("/insights", tokenVerify, chatInsightsController);
 
 /**
  * @openapi

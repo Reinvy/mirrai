@@ -6,6 +6,7 @@ const {
   getPersonalityController,
   updatePersonalityController,
   getPersonalityHistoryController,
+  getPersonalityInsightsController,
 } = require("./personality-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -68,6 +69,19 @@ router.get(
   tokenVerify,
   getPersonalityHistoryController,
 );
+
+/**
+ * @openapi
+ * /personality/me/insights:
+ *   get:
+ *     tags: [Personality]
+ *     summary: Ringkasan personality + tren 7 hari
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Personality insights }
+ */
+router.get("/me/insights", tokenVerify, getPersonalityInsightsController);
 
 router.get(
   "/:userId",

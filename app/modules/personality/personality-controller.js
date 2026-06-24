@@ -1,6 +1,7 @@
 "use strict";
 
 const { getPersonality, updatePersonality, getPersonalityHistory } = require("./personality-service");
+const { getPersonalityInsights } = require("../../services/insights");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 const { AppError } = require("../../utils/app-error");
 
@@ -67,4 +68,14 @@ module.exports = {
   getPersonalityController,
   updatePersonalityController,
   getPersonalityHistoryController,
+  getPersonalityInsightsController: async (req, res, next) => {
+    try {
+      const data = await getPersonalityInsights(req.credentials.id);
+      res
+        .status(200)
+        .json(formatSuccessResponse({ message: "Personality insights", data }));
+    } catch (err) {
+      next(err);
+    }
+  },
 };
