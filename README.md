@@ -119,6 +119,8 @@ Lihat Scalar UI di `http://localhost:3000/docs` untuk dokumentasi lengkap dengan
 | POST | `/api/auth/logout` | ✅ | 20/15min | blacklist token |
 | GET  | `/api/auth/me` | ✅ | 120/min | |
 | PUT  | `/api/auth/me/profile` | ✅ | 30/min | update bio + public flag |
+| GET  | `/api/auth/me/quota` | ✅ | 60/min | daily chat quota status |
+| POST | `/api/auth/me/upgrade` | ✅ | 5/day | upgrade to Pro tier (dev: no payment) |
 | PUT  | `/api/auth/password` | ✅ | 20/15min | invalidate all tokens user |
 | DELETE | `/api/auth/me` | ✅ | 20/15min | soft-delete cascade |
 | GET  | `/api/auth/me/export` | ✅ | 120/min | download JSON dump |
@@ -129,6 +131,7 @@ Lihat Scalar UI di `http://localhost:3000/docs` untuk dokumentasi lengkap dengan
 | ------ | ---- | :--: | :--------: | ------- |
 | GET  | `/api/memory/me` | ✅ | 120/min | list my memories |
 | GET  | `/api/memory/insights` | ✅ | 120/min | stats by type, top important |
+| GET  | `/api/memory/graph` | ✅ | 30/min | nodes + edges from embedding similarity |
 | POST | `/api/memory` | ✅ | 30/min | |
 | PUT  | `/api/memory/:id` | ✅ | 30/min | |
 | DELETE | `/api/memory/:id` | ✅ | 30/min | |
