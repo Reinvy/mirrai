@@ -3,7 +3,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { ChatValidation } = require("./chat-validation");
-const { chatController, chatHistoryController } = require("./chat-controller");
+const { chatController, chatHistoryController, playgroundController } = require("./chat-controller");
 const {
   createThreadController,
   getThreadsController,
@@ -131,6 +131,43 @@ router.post(
   chatRateLimiter,
   ChatValidation.validateChat,
   chatController,
+);
+
+/**
+ * @openapi
+ * /chat/playground:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Kirim pesan simulasi Digital Twin vs Asisten AI Standard
+ *     description: |
+ *       Menjalankan simulasi ephemeral (sementara) membandingkan Digital Twin dengan Asisten AI Standard.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message]
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 example: Aku merasa sangat tertekan dengan pekerjaan baruku
+ *     responses:
+ *       200:
+ *         description: Simulasi berhasil diselesaikan
+ *       400:
+ *         description: Pesan kosong
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/playground",
+  tokenVerify,
+  chatRateLimiter,
+  ChatValidation.validateChat,
+  playgroundController,
 );
 
 /**

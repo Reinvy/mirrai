@@ -1,6 +1,6 @@
 "use strict";
 
-const { processChat, getChatHistory } = require("./chat-service");
+const { processChat, getChatHistory, simulateChat } = require("./chat-service");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function chatController(req, res, next) {
@@ -19,7 +19,7 @@ async function chatController(req, res, next) {
   }
 }
 
-module.exports = { chatController, chatHistoryController };
+module.exports = { chatController, chatHistoryController, playgroundController };
 
 async function chatHistoryController(req, res, next) {
   try {
@@ -32,6 +32,22 @@ async function chatHistoryController(req, res, next) {
       formatSuccessResponse({
         message: "Riwayat chat berhasil diambil",
         ...result,
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function playgroundController(req, res, next) {
+  try {
+    const userId = req.credentials.id;
+    const { message } = req.body;
+    const result = await simulateChat(userId, message);
+    res.status(200).json(
+      formatSuccessResponse({
+        message: "Simulasi berhasil diselesaikan",
+        data: result,
       }),
     );
   } catch (err) {

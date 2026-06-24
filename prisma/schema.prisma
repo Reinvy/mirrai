@@ -44,6 +44,7 @@ model Conversation {
     threadId  String?
     message   String
     response  String
+    reasoning String?
     emotion   Json
     createdAt DateTime  @default(now())
     deletedAt DateTime?

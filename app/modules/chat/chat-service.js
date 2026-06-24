@@ -8,6 +8,7 @@ const { evolvePersonality } = require("../../services/evolution");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
 const { createThread, generateThreadTitle } = require("./thread-service");
+const { assistantChain } = require("../../llm/chains/assistant-chain");
 const { logger } = require("../../config/logger");
 
 async function processChat(userId, message, threadId = null) {
@@ -53,6 +54,7 @@ async function processChat(userId, message, threadId = null) {
       threadId: activeThreadId,
       message: message.trim(),
       response,
+      reasoning,
       emotion,
     },
   });
@@ -84,6 +86,7 @@ async function processChat(userId, message, threadId = null) {
   return {
     response,
     emotion,
+    reasoning,
     personality_snapshot: updatedPersonality,
     threadId: activeThreadId,
   };
@@ -108,6 +111,7 @@ async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } 
         id: true,
         message: true,
         response: true,
+        reasoning: true,
         emotion: true,
         createdAt: true,
         threadId: true,
@@ -126,5 +130,50 @@ async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } 
   };
 }
 
-module.exports = { processChat, getChatHistory };
+async function simulateChat(userId, message) {
+  const start = Date.now();
+  logger.debug({ message: "Simulate chat start", userId });
+
+  const [emotion, memories, personality] = await Promise.all([
+    detectEmotion(message),
+    retrieveMemory({ userId, query: message, limit: 5 }),
+    getPersonality(userId),
+  ]);
+
+  const [reasoning, assistantResponse] = await Promise.all([
+    generateThought({
+      userInput: message,
+      memories,
+      personality,
+    }),
+    assistantChain.invoke({
+      userInput: message,
+    }),
+  ]);
+
+  const response = await generateDecision({
+    userInput: message,
+    emotion,
+    memories,
+    personality,
+    reasoning,
+  });
+
+  const duration = Date.now() - start;
+  logger.debug({ message: "Simulate chat done", userId, duration });
+
+  return {
+    twin: {
+      response,
+      reasoning,
+      emotion,
+      personality_snapshot: personality,
+    },
+    assistant: {
+      response: assistantResponse,
+    },
+  };
+}
+
+module.exports = { processChat, getChatHistory, simulateChat };
 
