@@ -19,8 +19,6 @@ async function chatController(req, res, next) {
   }
 }
 
-module.exports = { chatController, chatHistoryController, playgroundController };
-
 async function chatHistoryController(req, res, next) {
   try {
     const userId = req.credentials.id;
@@ -54,3 +52,5 @@ async function playgroundController(req, res, next) {
     next(err);
   }
 }
+
+module.exports = { chatController, chatHistoryController, playgroundController };

@@ -52,6 +52,24 @@ const router = express.Router();
  *               $ref: '#/components/schemas/Error'
  */
 router.get(
+  "/me",
+  tokenVerify,
+  getPersonalityController,
+);
+
+router.put(
+  "/me",
+  tokenVerify,
+  updatePersonalityController,
+);
+
+router.get(
+  "/me/history",
+  tokenVerify,
+  getPersonalityHistoryController,
+);
+
+router.get(
   "/:userId",
   tokenVerify,
   PersonalityValidation.validateGetByUser,

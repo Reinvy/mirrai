@@ -20,6 +20,21 @@ async function tokenVerify(req, res, next) {
       throw new AppError(401, "Token tidak valid atau sudah kadaluarsa");
     }
 
+    // Validate user still exists, not soft-deleted, and tokenVersion matches
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { tokenVersion: true, deletedAt: true },
+    });
+    if (!user || user.deletedAt) {
+      throw new AppError(401, "Token tidak valid atau sudah kadaluarsa");
+    }
+    if (
+      typeof decoded.tokenVersion !== "number" ||
+      decoded.tokenVersion !== user.tokenVersion
+    ) {
+      throw new AppError(401, "Token sudah tidak valid");
+    }
+
     // Check blacklist
     const blacklisted = await prisma.tokenBlacklist.findUnique({
       where: { token },

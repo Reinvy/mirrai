@@ -1,0 +1,43 @@
+name: mirrai
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mirrai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mirrai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mirrai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Optional: backend (uncomment to run with `docker compose up backend`)
+  # backend:
+  #   build: ./mirrai
+  #   container_name: mirrai-backend
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mirrai
+  #     JWT_SECRET: change-me-32-chars-minimum-secret-please
+  #     JWT_EXPIRATION: 8h
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #     OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+  #     PORT: 3000
+  #     NODE_ENV: development
+  #     ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
+  #   ports:
+  #     - "3000:3000"
+
+volumes:
+  pgdata:

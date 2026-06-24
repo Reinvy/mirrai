@@ -6,6 +6,7 @@ const {
   registerController,
   loginController,
   logoutController,
+  meController,
 } = require("./auth-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -106,5 +107,25 @@ router.post("/login", AuthValidation.validateLogin, loginController);
  *               $ref: '#/components/schemas/Error'
  */
 router.post("/logout", tokenVerify, logoutController);
+
+/**
+ * @openapi
+ * /auth/me:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Ambil data user yang sedang login
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Data user berhasil diambil
+ *       401:
+ *         description: Token tidak valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/me", tokenVerify, meController);
 
 module.exports = router;

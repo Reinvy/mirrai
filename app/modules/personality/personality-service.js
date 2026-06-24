@@ -13,21 +13,6 @@ async function getPersonality(userId) {
   return personality;
 }
 
-async function initPersonality(userId) {
-  const personality = await prisma.personality.create({
-    data: {
-      userId,
-      empathy: 0.5,
-      logic: 0.5,
-      humor: 0.5,
-      confidence: 0.5,
-      playfulness: 0.5,
-    },
-  });
-  await savePersonalitySnapshot(userId, personality);
-  return personality;
-}
-
 function clamp(val, min = 0.1, max = 1.0) {
   return Math.min(Math.max(val, min), max);
 }
@@ -69,7 +54,6 @@ async function getPersonalityHistory(userId, { limit = 30 } = {}) {
 
 module.exports = {
   getPersonality,
-  initPersonality,
   updatePersonality,
   savePersonalitySnapshot,
   getPersonalityHistory,

@@ -24,6 +24,16 @@ const chatRateLimiter = rateLimit({
     message: "Terlalu banyak request. Coba lagi dalam 1 menit.",
   },
 });
+const threadRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "error",
+    message: "Terlalu banyak request. Coba lagi sebentar lagi.",
+  },
+});
 
 /**
  * @openapi
@@ -185,6 +195,7 @@ router.post(
 router.get(
   "/threads",
   tokenVerify,
+  threadRateLimiter,
   getThreadsController,
 );
 
@@ -212,6 +223,7 @@ router.get(
 router.post(
   "/threads",
   tokenVerify,
+  threadRateLimiter,
   createThreadController,
 );
 
@@ -246,6 +258,7 @@ router.post(
 router.put(
   "/threads/:threadId",
   tokenVerify,
+  threadRateLimiter,
   updateThreadController,
 );
 
@@ -270,6 +283,7 @@ router.put(
 router.delete(
   "/threads/:threadId",
   tokenVerify,
+  threadRateLimiter,
   deleteThreadController,
 );
 

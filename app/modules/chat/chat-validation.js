@@ -2,6 +2,8 @@
 
 const { AppError } = require("../../utils/app-error");
 
+const MAX_MESSAGE_LEN = 4000;
+
 class ChatValidation {
   static validateChat(req, res, next) {
     const { message } = req.body;
@@ -11,6 +13,9 @@ class ChatValidation {
       message.trim().length === 0
     ) {
       throw new AppError(400, "Pesan tidak boleh kosong");
+    }
+    if (message.length > MAX_MESSAGE_LEN) {
+      throw new AppError(400, `Pesan terlalu panjang (maks ${MAX_MESSAGE_LEN} karakter)`);
     }
     next();
   }
