@@ -18,6 +18,7 @@ const {
 } = require("./thread-controller");
 const {
   chatInsightsController,
+  moodTimelineController,
 } = require("./insights-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -249,6 +250,23 @@ router.post(
  *         description: Insights berhasil diambil
  */
 router.get("/insights", tokenVerify, chatInsightsController);
+
+/**
+ * @openapi
+ * /chat/mood-timeline:
+ *   get:
+ *     tags: [Chat]
+ *     summary: Timeline emosi harian (default 30 hari)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema: { type: integer, maximum: 90, default: 30 }
+ *     responses:
+ *       200: { description: Mood timeline }
+ */
+router.get("/mood-timeline", tokenVerify, moodTimelineController);
 
 /**
  * @openapi

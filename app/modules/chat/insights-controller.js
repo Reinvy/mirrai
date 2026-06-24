@@ -4,6 +4,7 @@ const {
   getChatInsights,
   getMemoryInsights,
   getPersonalityInsights,
+  getMoodTimeline,
 } = require("../../services/insights");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
@@ -29,6 +30,18 @@ async function memoryInsightsController(req, res, next) {
   }
 }
 
+async function moodTimelineController(req, res, next) {
+  try {
+    const days = Math.min(parseInt(req.query.days, 10) || 30, 90);
+    const data = await getMoodTimeline(req.credentials.id, days);
+    res
+      .status(200)
+      .json(formatSuccessResponse({ message: "Mood timeline", data }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function personalityInsightsController(req, res, next) {
   try {
     const data = await getPersonalityInsights(req.credentials.id);
@@ -44,4 +57,5 @@ module.exports = {
   chatInsightsController,
   memoryInsightsController,
   personalityInsightsController,
+  moodTimelineController,
 };

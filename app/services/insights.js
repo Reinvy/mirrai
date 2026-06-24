@@ -74,6 +74,48 @@ async function getChatInsights(userId) {
   };
 }
 
+async function getMoodTimeline(userId, days = 30) {
+  const start = startOfDay(new Date(Date.now() - (days - 1) * 86400000));
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      userId,
+      deletedAt: null,
+      createdAt: { gte: start },
+    },
+    select: { createdAt: true, emotion: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Initialize all days
+  const buckets = new Map();
+  for (let i = days - 1; i >= 0; i--) {
+    const day = startOfDay(new Date(Date.now() - i * 86400000));
+    const key = day.toISOString().slice(0, 10);
+    buckets.set(key, { date: key, total: 0, emotions: {} });
+  }
+
+  for (const c of conversations) {
+    const key = startOfDay(c.createdAt).toISOString().slice(0, 10);
+    if (!buckets.has(key)) continue;
+    const bucket = buckets.get(key);
+    const label = c.emotion?.emotion || "unknown";
+    bucket.emotions[label] = (bucket.emotions[label] || 0) + 1;
+    bucket.total += 1;
+  }
+
+  const timeline = [...buckets.values()].map((b) => {
+    const sorted = Object.entries(b.emotions).sort((a, b) => b[1] - a[1]);
+    return {
+      date: b.date,
+      total: b.total,
+      emotions: b.emotions,
+      dominant: sorted[0]?.[0] ?? "neutral",
+    };
+  });
+
+  return { days, timeline };
+}
+
 async function getMemoryInsights(userId) {
   const [totalMemories, byTypeRaw, topImportant, mostRecent, avgAgg] =
     await Promise.all([
@@ -235,4 +277,5 @@ module.exports = {
   getChatInsights,
   getMemoryInsights,
   getPersonalityInsights,
+  getMoodTimeline,
 };
