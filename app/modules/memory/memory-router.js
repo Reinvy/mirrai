@@ -39,6 +39,20 @@ const router = express.Router();
  *               $ref: '#/components/schemas/Error'
  */
 router.get("/me", tokenVerify, getMemoriesController);
+
+/**
+ * @openapi
+ * /memory/insights:
+ *   get:
+ *     tags: [Memory]
+ *     summary: Statistik memories (count by type, top important, dll)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Memory insights }
+ */
+router.get("/insights", tokenVerify, memoryInsightsController);
+
 router.get("/:userId", tokenVerify, getMemoriesController);
 
 /**
@@ -100,18 +114,5 @@ router.delete(
   tokenVerify,
   deleteMemoryController,
 );
-
-/**
- * @openapi
- * /memory/insights:
- *   get:
- *     tags: [Memory]
- *     summary: Statistik memories (count by type, top important, dll)
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200: { description: Memory insights }
- */
-router.get("/insights", tokenVerify, memoryInsightsController);
 
 module.exports = router;
