@@ -7,11 +7,20 @@ const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { logger } = require("../../config/logger");
 const { AppError } = require("../../utils/app-error");
 
+const MAX_THREAD_TITLE_LEN = 100;
+
 async function createThread(userId, title = "Percakapan Baru") {
+  const cleanTitle = (title || "Percakapan Baru").toString().trim();
+  if (cleanTitle.length === 0) {
+    throw new AppError(400, "Judul thread tidak boleh kosong");
+  }
+  if (cleanTitle.length > MAX_THREAD_TITLE_LEN) {
+    throw new AppError(400, `Judul thread terlalu panjang (maks ${MAX_THREAD_TITLE_LEN} karakter)`);
+  }
   return await prisma.thread.create({
     data: {
       userId,
-      title: title.trim(),
+      title: cleanTitle,
     },
   });
 }
@@ -31,6 +40,9 @@ async function getThreadsByUser(userId) {
 async function updateThread(threadId, userId, { title }) {
   if (!title || typeof title !== "string" || title.trim().length === 0) {
     throw new AppError(400, "Judul thread tidak boleh kosong");
+  }
+  if (title.length > MAX_THREAD_TITLE_LEN) {
+    throw new AppError(400, `Judul thread terlalu panjang (maks ${MAX_THREAD_TITLE_LEN} karakter)`);
   }
 
   // Verify ownership

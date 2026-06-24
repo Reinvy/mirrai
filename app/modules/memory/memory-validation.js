@@ -3,6 +3,7 @@
 const { AppError } = require("../../utils/app-error");
 
 const VALID_MEMORY_TYPES = ["SHORT_TERM", "LONG_TERM", "SEMANTIC", "EMOTIONAL"];
+const MAX_CONTENT_LEN = 2000;
 
 class MemoryValidation {
   static validateCreate(req, res, next) {
@@ -13,6 +14,9 @@ class MemoryValidation {
       content.trim().length === 0
     ) {
       throw new AppError(400, "Konten memory harus diisi");
+    }
+    if (content.length > MAX_CONTENT_LEN) {
+      throw new AppError(400, `Konten memory terlalu panjang (maks ${MAX_CONTENT_LEN} karakter)`);
     }
     if (!type || !VALID_MEMORY_TYPES.includes(type)) {
       throw new AppError(
@@ -29,6 +33,9 @@ class MemoryValidation {
     if (content !== undefined) {
       if (typeof content !== "string" || content.trim().length === 0) {
         throw new AppError(400, "Konten memory tidak boleh kosong jika disediakan");
+      }
+      if (content.length > MAX_CONTENT_LEN) {
+        throw new AppError(400, `Konten memory terlalu panjang (maks ${MAX_CONTENT_LEN} karakter)`);
       }
     }
 
