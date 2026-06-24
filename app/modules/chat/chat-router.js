@@ -33,6 +33,13 @@ const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
 
+// Public, unauthenticated routes MUST come before any `/:param` routes
+// to prevent Express from matching them as conversationId/threadId.
+router.get("/shared/:slug", getSharedThreadController);
+router.get("/users/:username", getPublicProfileController);
+router.get("/users/:username/threads", getPublicThreadsController);
+router.get("/compare", compareController);
+
 const chatRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10,

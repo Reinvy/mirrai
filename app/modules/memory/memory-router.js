@@ -10,6 +10,7 @@ const {
   memoryInsightsController,
 } = require("./memory-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
+const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 const router = express.Router();
 
