@@ -3,7 +3,12 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { ChatValidation } = require("./chat-validation");
-const { chatController, chatHistoryController, playgroundController } = require("./chat-controller");
+const {
+  chatController,
+  chatHistoryController,
+  playgroundController,
+  getConversationByIdController,
+} = require("./chat-controller");
 const { chatStreamController } = require("./chat-stream-controller");
 const {
   createThreadController,
@@ -350,6 +355,29 @@ router.delete(
   tokenVerify,
   threadRateLimiter,
   deleteThreadController,
+);
+
+/**
+ * @openapi
+ * /chat/{conversationId}:
+ *   get:
+ *     tags: [Chat]
+ *     summary: Ambil satu conversation by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Conversation }
+ *       404: { description: Tidak ditemukan }
+ */
+router.get(
+  "/:conversationId",
+  tokenVerify,
+  getConversationByIdController,
 );
 
 module.exports = router;

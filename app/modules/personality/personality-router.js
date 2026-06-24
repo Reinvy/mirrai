@@ -7,6 +7,7 @@ const {
   updatePersonalityController,
   getPersonalityHistoryController,
   getPersonalityInsightsController,
+  resetPersonalityController,
 } = require("./personality-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
@@ -55,7 +56,7 @@ const router = express.Router();
 router.get(
   "/me",
   tokenVerify,
-  getPersonalityController,
+  updatePersonalityController,
 );
 
 router.put(
@@ -82,6 +83,19 @@ router.get(
  *       200: { description: Personality insights }
  */
 router.get("/me/insights", tokenVerify, getPersonalityInsightsController);
+
+/**
+ * @openapi
+ * /personality/me/reset:
+ *   post:
+ *     tags: [Personality]
+ *     summary: Reset personality ke default 0.5 (simpan snapshot)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Reset berhasil }
+ */
+router.post("/me/reset", tokenVerify, resetPersonalityController);
 
 router.get(
   "/:userId",

@@ -61,9 +61,26 @@ async function getPersonalityHistory(
   return history.reverse(); // oldest-first for easy plotting
 }
 
+async function resetPersonality(userId) {
+  const defaults = {
+    empathy: 0.5,
+    logic: 0.5,
+    humor: 0.5,
+    confidence: 0.5,
+    playfulness: 0.5,
+  };
+  const updated = await prisma.personality.update({
+    where: { userId },
+    data: defaults,
+  });
+  await savePersonalitySnapshot(userId, updated);
+  return updated;
+}
+
 module.exports = {
   getPersonality,
   updatePersonality,
   savePersonalitySnapshot,
   getPersonalityHistory,
+  resetPersonality,
 };

@@ -1,6 +1,6 @@
 "use strict";
 
-const { getPersonality, updatePersonality, getPersonalityHistory } = require("./personality-service");
+const { getPersonality, updatePersonality, getPersonalityHistory, resetPersonality } = require("./personality-service");
 const { getPersonalityInsights } = require("../../services/insights");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 const { AppError } = require("../../utils/app-error");
@@ -68,6 +68,21 @@ module.exports = {
   getPersonalityController,
   updatePersonalityController,
   getPersonalityHistoryController,
+  resetPersonalityController: async (req, res, next) => {
+    try {
+      const updated = await resetPersonality(req.credentials.id);
+      res
+        .status(200)
+        .json(
+          formatSuccessResponse({
+            message: "Personality di-reset ke default",
+            data: updated,
+          }),
+        );
+    } catch (err) {
+      next(err);
+    }
+  },
   getPersonalityInsightsController: async (req, res, next) => {
     try {
       const data = await getPersonalityInsights(req.credentials.id);
