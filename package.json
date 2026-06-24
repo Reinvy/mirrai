@@ -5,6 +5,9 @@
   "scripts": {
     "start": "node ./bin/www",
     "test": "jest --runInBand",
+    "seed": "node scripts/seed.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -33,6 +36,7 @@
   },
   "devDependencies": {
     "jest": "^30.3.0",
+    "prettier": "^3.8.4",
     "prisma": "^7.5.0",
     "supertest": "^7.2.2"
   }
