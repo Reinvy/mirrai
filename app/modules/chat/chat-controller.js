@@ -8,8 +8,8 @@ const { AppError } = require("../../utils/app-error");
 async function chatController(req, res, next) {
   try {
     const userId = req.credentials.id;
-    const { message, threadId } = req.body;
-    const result = await processChat(userId, message, threadId);
+    const { message, threadId, attachments } = req.body;
+    const result = await processChat(userId, message, threadId, attachments);
     res.status(200).json(
       formatSuccessResponse({
         message: "Respons berhasil dihasilkan",

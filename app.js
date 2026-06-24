@@ -91,8 +91,8 @@ app.use(
 
 // Logging & parsing
 app.use(morgan("dev"));
-app.use(express.json({ limit: "100kb" }));
-app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: false, limit: "25mb" }));
 
 // API routes
 app.use("/api/auth", authLimiter, authRouter);

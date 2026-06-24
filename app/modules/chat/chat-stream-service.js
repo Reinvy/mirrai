@@ -22,7 +22,7 @@ const { logger } = require("../../config/logger");
  *  6-8. Save conversation, save memory, evolve personality (after stream)
  *  +. Background thread title generation for new thread
  */
-async function* processChatStream(userId, message, threadId = null) {
+async function* processChatStream(userId, message, threadId = null, attachments = []) {
   const start = Date.now();
   logger.debug({ message: "Chat stream pipeline start", userId, threadId });
 
@@ -62,6 +62,7 @@ async function* processChatStream(userId, message, threadId = null) {
       memories,
       personality,
       reasoning,
+      attachments,
     })) {
       fullResponse += delta;
       yield JSON.stringify({ event: "delta", text: delta });

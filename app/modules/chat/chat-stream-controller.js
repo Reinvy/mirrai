@@ -7,7 +7,7 @@ const KEEPALIVE_INTERVAL_MS = 15000;
 
 async function chatStreamController(req, res, next) {
   const userId = req.credentials.id;
-  const { message, threadId } = req.body;
+  const { message, threadId, attachments } = req.body;
 
   // SSE headers
   res.status(200);
@@ -38,7 +38,7 @@ async function chatStreamController(req, res, next) {
   req.on("aborted", onClose);
 
   try {
-    for await (const payload of processChatStream(userId, message, threadId)) {
+    for await (const payload of processChatStream(userId, message, threadId, attachments)) {
       if (aborted) break;
       res.write(`data: ${payload}\n\n`);
     }

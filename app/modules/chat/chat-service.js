@@ -11,7 +11,7 @@ const { createThread, generateThreadTitle } = require("./thread-service");
 const { assistantChain } = require("../../llm/chains/assistant-chain");
 const { logger } = require("../../config/logger");
 
-async function processChat(userId, message, threadId = null) {
+async function processChat(userId, message, threadId = null, attachments = []) {
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId, threadId });
 
@@ -45,6 +45,7 @@ async function processChat(userId, message, threadId = null) {
     memories,
     personality,
     reasoning,
+    attachments,
   });
 
   // Step 6: Save Conversation

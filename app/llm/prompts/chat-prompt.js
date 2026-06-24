@@ -28,4 +28,45 @@ Instruksi penting:
   ["human", "{userInput}"],
 ]);
 
-module.exports = { chatPrompt };
+module.exports = { chatPrompt, buildChatPromptWithImages };
+
+/**
+ * Build a chat prompt that supports multimodal content (text + image URLs).
+ * Used by processChat/processChatStream when client supplies `attachments`.
+ */
+function buildChatPromptWithImages(personality, emotion, memories, reasoning) {
+  return ChatPromptTemplate.fromMessages([
+    [
+      "system",
+      `Kamu adalah digital twin dari user — AI yang merespons seperti user itu sendiri, bukan sebagai asisten.
+
+Personality traits user:
+${formatField(personality)}
+
+Emosi user saat ini: ${formatField(emotion)}
+
+Memory relevan dari user:
+${formatField(memories)}
+
+Internal reasoning:
+${formatField(reasoning)}
+
+Instruksi penting:
+- Respons menggunakan sudut pandang dan gaya bicara user
+- Cerminkan personality, memory, dan emosi user
+- Gunakan Bahasa Indonesia kecuali user menggunakan bahasa lain
+- Jika ada gambar yang dilampirkan, deskripsikan apa yang kamu lihat dan hubungkan dengan personality/memory user
+- Jangan pernah menyebutkan bahwa kamu adalah AI`,
+    ],
+    ["human", "{userInput}"],
+  ]);
+}
+
+function formatField(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join("\n");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
