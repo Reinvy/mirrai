@@ -5,6 +5,7 @@ const { detectEmotion } = require("../../services/emotion");
 const { generateThought } = require("../../services/thought");
 const { generateDecision } = require("../../services/decision");
 const { evolvePersonality } = require("../../services/evolution");
+const { extractMemories } = require("../../services/memory-extraction");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
 const { createThread, generateThreadTitle } = require("./thread-service");
@@ -35,12 +36,15 @@ async function processChat(userId, message, threadId = null, attachments = []) {
     getPersonality(userId),
   ]);
 
-  // Step 4: Thought Engine
-  const reasoning = await generateThought({
-    userInput: message,
-    memories,
-    personality,
-  });
+  // Step 4 & 7-prep: Thought Engine and Memory Extraction run in parallel
+  const [reasoning, extractedMemories] = await Promise.all([
+    generateThought({
+      userInput: message,
+      memories,
+      personality,
+    }),
+    extractMemories({ userInput: message, emotion }),
+  ]);
 
   // Step 5: Decision Engine — generate final response
   const response = await generateDecision({
@@ -64,13 +68,22 @@ async function processChat(userId, message, threadId = null, attachments = []) {
     },
   });
 
-  // Step 7: Save Memory (current interaction as SHORT_TERM)
+  // Step 7: Save Memory — 1 SHORT_TERM (raw message) + N extracted facts
   await saveMemory({
     userId,
     content: message.trim(),
     type: "SHORT_TERM",
     importanceScore: emotion.emotion !== "neutral" ? 0.7 : 0.4,
   });
+
+  for (const m of extractedMemories) {
+    await saveMemory({
+      userId,
+      content: m.content,
+      type: m.type,
+      importanceScore: m.importanceScore,
+    });
+  }
 
   // Step 8: Self-Evolution — update personality traits
   await evolvePersonality({ userId, emotion });
@@ -196,4 +209,3 @@ async function retrieveMemorySafe(args) {
 }
 
 module.exports = { processChat, getChatHistory, simulateChat };
-

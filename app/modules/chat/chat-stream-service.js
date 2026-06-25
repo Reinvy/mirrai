@@ -5,6 +5,7 @@ const { detectEmotion } = require("../../services/emotion");
 const { generateThought } = require("../../services/thought");
 const { streamDecision } = require("../../services/decision");
 const { evolvePersonality } = require("../../services/evolution");
+const { extractMemories } = require("../../services/memory-extraction");
 const { saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
 const { createThread, generateThreadTitle } = require("./thread-service");
@@ -53,12 +54,15 @@ async function* processChatStream(userId, message, threadId = null, attachments 
 
   yield JSON.stringify({ event: "meta", threadId: activeThreadId, emotion });
 
-  // Step 4
-  const reasoning = await generateThought({
-    userInput: message,
-    memories,
-    personality,
-  });
+  // Step 4 & extraction-prep: Thought and Memory Extraction run in parallel
+  const [reasoning, extractedMemories] = await Promise.all([
+    generateThought({
+      userInput: message,
+      memories,
+      personality,
+    }),
+    extractMemories({ userInput: message, emotion }),
+  ]);
 
   yield JSON.stringify({ event: "reasoning", reasoning });
 
@@ -105,6 +109,15 @@ async function* processChatStream(userId, message, threadId = null, attachments 
       type: "SHORT_TERM",
       importanceScore: emotion.emotion !== "neutral" ? 0.7 : 0.4,
     });
+
+    for (const m of extractedMemories) {
+      await saveMemory({
+        userId,
+        content: m.content,
+        type: m.type,
+        importanceScore: m.importanceScore,
+      });
+    }
 
     await evolvePersonality({ userId, emotion });
 
