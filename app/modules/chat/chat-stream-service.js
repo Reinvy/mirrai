@@ -11,6 +11,7 @@ const { getPersonality } = require("../personality/personality-service");
 const { formatPersonalityTrend } = require("../../llm/format");
 const { createThread, generateThreadTitle } = require("./thread-service");
 const { logger } = require("../../config/logger");
+const { getLlmForUser } = require("../../services/llm-resolver");
 
 const THREAD_CONTEXT_LIMIT = 5;
 
@@ -57,12 +58,18 @@ async function* processChatStream(userId, message, threadId = null, attachments 
   const start = Date.now();
   logger.debug({ message: "Chat stream pipeline start", userId, threadId });
 
-  const { checkAndIncrementQuota } = require("../../services/quota");
-  try {
-    await checkAndIncrementQuota(userId);
-  } catch (err) {
-    yield JSON.stringify({ event: "error", message: err.message });
-    return;
+  const { llm, byok } = await getLlmForUser(userId);
+
+  if (!byok) {
+    const { checkAndIncrementQuota } = require("../../services/quota");
+    try {
+      await checkAndIncrementQuota(userId);
+    } catch (err) {
+      yield JSON.stringify({ event: "error", message: err.message });
+      return;
+    }
+  } else {
+    logger.debug({ message: "BYOK active, skipping quota check", userId });
   }
 
   let activeThreadId = threadId;
@@ -76,7 +83,7 @@ async function* processChatStream(userId, message, threadId = null, attachments 
 
   const [emotion, memories, personality, profile, threadContext, personalityTrend] =
     await Promise.all([
-      detectEmotion(message),
+      detectEmotion(message, { llm }),
       retrieveMemorySafe({ userId, query: message, limit: 5 }),
       getPersonality(userId),
       getProfile(userId),
@@ -87,32 +94,38 @@ async function* processChatStream(userId, message, threadId = null, attachments 
   yield JSON.stringify({ event: "meta", threadId: activeThreadId, emotion });
 
   const [reasoning, extractedMemories] = await Promise.all([
-    generateThought({
-      userInput: message,
-      memories,
-      personality,
-      profile,
-      threadContext,
-    }),
-    extractMemories({ userInput: message, emotion }),
+    generateThought(
+      {
+        userInput: message,
+        memories,
+        personality,
+        profile,
+        threadContext,
+      },
+      { llm },
+    ),
+    extractMemories({ userInput: message, emotion }, { llm }),
   ]);
 
   yield JSON.stringify({ event: "reasoning", reasoning });
 
   let fullResponse = "";
   try {
-    for await (const delta of streamResponse({
-      userInput: message,
-      name: profile?.name,
-      profile,
-      personality,
-      personalityTrend,
-      emotion,
-      memories,
-      reasoning,
-      threadContext,
-      attachments,
-    })) {
+    for await (const delta of streamResponse(
+      {
+        userInput: message,
+        name: profile?.name,
+        profile,
+        personality,
+        personalityTrend,
+        emotion,
+        memories,
+        reasoning,
+        threadContext,
+        attachments,
+      },
+      { llm },
+    )) {
       fullResponse += delta;
       yield JSON.stringify({ event: "delta", text: delta });
     }
@@ -159,7 +172,7 @@ async function* processChatStream(userId, message, threadId = null, attachments 
     const updatedPersonality = await getPersonality(userId);
 
     if (isNewThread) {
-      generateThreadTitle(activeThreadId, userId).catch((err) => {
+      generateThreadTitle(activeThreadId, userId, { llm }).catch((err) => {
         logger.error({
           message: "Error generating thread title in background",
           error: err.message,

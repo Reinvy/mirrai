@@ -24,6 +24,10 @@ model User {
     tier               String               @default("free")
     dailyChatCount     Int                  @default(0)
     dailyCountDate     DateTime?
+    byokEnabled        Boolean              @default(false)
+    byokApiKey         String?
+    byokBaseUrl        String?
+    byokModel          String?
     createdAt          DateTime             @default(now())
     deletedAt          DateTime?
     conversations      Conversation[]

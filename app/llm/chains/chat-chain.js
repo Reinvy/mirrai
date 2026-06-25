@@ -10,37 +10,29 @@ const SIMPLE_PROMPT = ChatPromptTemplate.fromMessages([
   ["human", "{userInput}"],
 ]);
 
-let _chain = null;
-let _modelOnlyChain = null;
-
-function getChain() {
-  if (!_chain) {
-    _chain = SIMPLE_PROMPT.pipe(getLlm()).pipe(new StringOutputParser());
-  }
-  return _chain;
+function buildChain(llm) {
+  return SIMPLE_PROMPT.pipe(llm).pipe(new StringOutputParser());
 }
 
-function getModelOnlyChain() {
-  if (!_modelOnlyChain) {
-    _modelOnlyChain = SIMPLE_PROMPT.pipe(getLlm());
-  }
-  return _modelOnlyChain;
+function buildModelOnlyChain(llm) {
+  return SIMPLE_PROMPT.pipe(llm);
 }
 
-async function* streamChat(input) {
-  const stream = await getChain().stream(input);
+async function* streamChat(input, { llm } = {}) {
+  const target = llm || getLlm();
+  const stream = await buildChain(target).stream(input);
   for await (const chunk of stream) {
     if (typeof chunk === "string" && chunk) yield chunk;
   }
 }
 
 const chatChain = {
-  invoke: async (input) => getChain().invoke(input),
+  invoke: async (input, { llm } = {}) => buildChain(llm || getLlm()).invoke(input),
   stream: streamChat,
 };
 
-async function invokeWithImages({ systemMessage, userText, attachments }) {
-  const llm = getLlm();
+async function invokeWithImages({ systemMessage, userText, attachments }, { llm } = {}) {
+  const target = llm || getLlm();
   const content = [];
 
   if (Array.isArray(attachments)) {
@@ -57,7 +49,7 @@ async function invokeWithImages({ systemMessage, userText, attachments }) {
 
   const messages = [new SystemMessage(systemMessage), new HumanMessage({ content })];
 
-  const result = await llm.invoke(messages);
+  const result = await target.invoke(messages);
   return typeof result.content === "string"
     ? result.content
     : Array.isArray(result.content)
@@ -65,8 +57,8 @@ async function invokeWithImages({ systemMessage, userText, attachments }) {
       : String(result.content);
 }
 
-async function* streamWithImages({ systemMessage, userText, attachments }) {
-  const llm = getLlm();
+async function* streamWithImages({ systemMessage, userText, attachments }, { llm } = {}) {
+  const target = llm || getLlm();
   const content = [];
 
   if (Array.isArray(attachments)) {
@@ -83,7 +75,7 @@ async function* streamWithImages({ systemMessage, userText, attachments }) {
 
   const messages = [new SystemMessage(systemMessage), new HumanMessage({ content })];
 
-  const stream = await llm.stream(messages);
+  const stream = await target.stream(messages);
   for await (const chunk of stream) {
     const text =
       typeof chunk.content === "string"
@@ -93,6 +85,10 @@ async function* streamWithImages({ systemMessage, userText, attachments }) {
           : "";
     if (text) yield text;
   }
+}
+
+function getModelOnlyChain(llm) {
+  return buildModelOnlyChain(llm || getLlm());
 }
 
 module.exports = {

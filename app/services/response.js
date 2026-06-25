@@ -30,7 +30,7 @@ function buildResponseContext({
   });
 }
 
-async function generateResponse(params) {
+async function generateResponse(params, { llm } = {}) {
   const {
     userInput,
     attachments,
@@ -55,7 +55,7 @@ async function generateResponse(params) {
       reasoning,
       threadContext,
     });
-    return await invokeWithImages({ systemMessage, userText: userInput, attachments });
+    return await invokeWithImages({ systemMessage, userText: userInput, attachments }, { llm });
   }
 
   return await chatChain.invoke(
@@ -70,10 +70,11 @@ async function generateResponse(params) {
       threadContext,
       userInput,
     }),
+    { llm },
   );
 }
 
-function streamResponse(params) {
+function streamResponse(params, { llm } = {}) {
   const {
     userInput,
     attachments,
@@ -98,7 +99,7 @@ function streamResponse(params) {
       reasoning,
       threadContext,
     });
-    return streamWithImages({ systemMessage, userText: userInput, attachments });
+    return streamWithImages({ systemMessage, userText: userInput, attachments }, { llm });
   }
 
   return streamChat(
@@ -113,6 +114,7 @@ function streamResponse(params) {
       threadContext,
       userInput,
     }),
+    { llm },
   );
 }
 

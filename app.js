@@ -21,6 +21,7 @@ const authRouter = require("./app/modules/auth/auth-router");
 const memoryRouter = require("./app/modules/memory/memory-router");
 const personalityRouter = require("./app/modules/personality/personality-router");
 const chatRouter = require("./app/modules/chat/chat-router");
+const byokRouter = require("./app/modules/byok/byok-router");
 
 const app = express();
 
@@ -100,6 +101,7 @@ app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/memory", readLimiter, memoryRouter);
 app.use("/api/personality", readLimiter, personalityRouter);
 app.use("/api/chat", chatRouter); // chat-router applies its own per-route limiter
+app.use("/api/byok", writeLimiter, byokRouter); // tokenVerify applied inside router
 
 // API docs
 app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));

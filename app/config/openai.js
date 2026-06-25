@@ -2,32 +2,31 @@
 
 const { ChatOpenAI } = require("@langchain/openai");
 
-let _llm = null;
+function resolveLlmConfig(overrides = {}) {
+  const apiKey = overrides.apiKey ?? process.env.OPENAI_API_KEY ?? process.env.OPENROUTER_API_KEY;
+  const baseURL =
+    overrides.baseURL ?? process.env.OPENAI_API_BASE_URL ?? process.env.OPENAI_BASE_URL;
+  const model = overrides.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const temperature =
+    overrides.temperature ??
+    (process.env.OPENAI_TEMPERATURE ? parseFloat(process.env.OPENAI_TEMPERATURE) : 0.7);
 
-function getLlm() {
-  if (!_llm) {
-    const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
-    const baseURL = process.env.OPENAI_API_BASE_URL || process.env.OPENAI_BASE_URL;
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const temperature = process.env.OPENAI_TEMPERATURE ? parseFloat(process.env.OPENAI_TEMPERATURE) : 0.7;
+  const config = {
+    apiKey,
+    openAIApiKey: apiKey,
+    model,
+    modelName: model,
+    temperature,
+  };
 
-    const config = {
-      apiKey: apiKey,
-      openAIApiKey: apiKey,
-      model: model,
-      modelName: model,
-      temperature: temperature,
-    };
-
-    if (baseURL) {
-      config.configuration = {
-        baseURL: baseURL,
-      };
-    }
-
-    _llm = new ChatOpenAI(config);
+  if (baseURL) {
+    config.configuration = { baseURL };
   }
-  return _llm;
+  return config;
 }
 
-module.exports = { getLlm };
+function getLlm(overrides = {}) {
+  return new ChatOpenAI(resolveLlmConfig(overrides));
+}
+
+module.exports = { getLlm, resolveLlmConfig };

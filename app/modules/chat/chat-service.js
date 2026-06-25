@@ -12,6 +12,7 @@ const { formatPersonalityTrend } = require("../../llm/format");
 const { createThread, generateThreadTitle } = require("./thread-service");
 const { assistantChain } = require("../../llm/chains/assistant-chain");
 const { logger } = require("../../config/logger");
+const { getLlmForUser } = require("../../services/llm-resolver");
 
 const THREAD_CONTEXT_LIMIT = 5;
 
@@ -58,8 +59,14 @@ async function processChat(userId, message, threadId = null, attachments = []) {
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId, threadId });
 
-  const { checkAndIncrementQuota } = require("../../services/quota");
-  await checkAndIncrementQuota(userId);
+  const { llm, byok } = await getLlmForUser(userId);
+
+  if (!byok) {
+    const { checkAndIncrementQuota } = require("../../services/quota");
+    await checkAndIncrementQuota(userId);
+  } else {
+    logger.debug({ message: "BYOK active, skipping quota check", userId });
+  }
 
   let activeThreadId = threadId;
   let isNewThread = false;
@@ -72,7 +79,7 @@ async function processChat(userId, message, threadId = null, attachments = []) {
 
   const [emotion, memories, personality, profile, threadContext, personalityTrend] =
     await Promise.all([
-      detectEmotion(message),
+      detectEmotion(message, { llm }),
       retrieveMemory({ userId, query: message, limit: 5 }),
       getPersonality(userId),
       getProfile(userId),
@@ -81,28 +88,34 @@ async function processChat(userId, message, threadId = null, attachments = []) {
     ]);
 
   const [reasoning, extractedMemories] = await Promise.all([
-    generateThought({
-      userInput: message,
-      memories,
-      personality,
-      profile,
-      threadContext,
-    }),
-    extractMemories({ userInput: message, emotion }),
+    generateThought(
+      {
+        userInput: message,
+        memories,
+        personality,
+        profile,
+        threadContext,
+      },
+      { llm },
+    ),
+    extractMemories({ userInput: message, emotion }, { llm }),
   ]);
 
-  const response = await generateResponse({
-    userInput: message,
-    name: profile?.name,
-    profile,
-    personality,
-    personalityTrend,
-    emotion,
-    memories,
-    reasoning,
-    threadContext,
-    attachments,
-  });
+  const response = await generateResponse(
+    {
+      userInput: message,
+      name: profile?.name,
+      profile,
+      personality,
+      personalityTrend,
+      emotion,
+      memories,
+      reasoning,
+      threadContext,
+      attachments,
+    },
+    { llm },
+  );
 
   await prisma.conversation.create({
     data: {
@@ -136,7 +149,7 @@ async function processChat(userId, message, threadId = null, attachments = []) {
   const updatedPersonality = await getPersonality(userId);
 
   if (isNewThread) {
-    generateThreadTitle(activeThreadId, userId).catch((err) => {
+    generateThreadTitle(activeThreadId, userId, { llm }).catch((err) => {
       logger.error({ message: "Error generating thread title in background", error: err.message });
     });
   }
@@ -195,9 +208,11 @@ async function simulateChat(userId, message, opts = {}) {
   const start = Date.now();
   logger.debug({ message: "Simulate chat start", userId });
 
+  const { llm } = await getLlmForUser(userId);
+
   const [emotion, memories, personality, profile, threadContext, personalityTrend] =
     await Promise.all([
-      detectEmotion(message),
+      detectEmotion(message, { llm }),
       retrieveMemorySafe({ userId, query: message, limit: 5 }),
       getPersonality(userId),
       getProfile(userId),
@@ -210,27 +225,33 @@ async function simulateChat(userId, message, opts = {}) {
     : personality;
 
   const [reasoning, assistantResponse] = await Promise.all([
-    generateThought({
-      userInput: message,
-      memories,
-      personality: effectivePersonality,
-      profile,
-      threadContext,
-    }),
-    assistantChain.invoke({ userInput: message }),
+    generateThought(
+      {
+        userInput: message,
+        memories,
+        personality: effectivePersonality,
+        profile,
+        threadContext,
+      },
+      { llm },
+    ),
+    assistantChain.invoke({ userInput: message }, { llm }),
   ]);
 
-  const response = await generateResponse({
-    userInput: message,
-    name: profile?.name,
-    profile,
-    personality: effectivePersonality,
-    personalityTrend,
-    emotion,
-    memories,
-    reasoning,
-    threadContext,
-  });
+  const response = await generateResponse(
+    {
+      userInput: message,
+      name: profile?.name,
+      profile,
+      personality: effectivePersonality,
+      personalityTrend,
+      emotion,
+      memories,
+      reasoning,
+      threadContext,
+    },
+    { llm },
+  );
 
   const duration = Date.now() - start;
   logger.debug({ message: "Simulate chat done", userId, duration });

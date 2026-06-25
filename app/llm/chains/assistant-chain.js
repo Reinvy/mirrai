@@ -4,15 +4,12 @@ const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { getLlm } = require("../../config/openai");
 const { assistantPrompt } = require("../prompts/assistant-prompt");
 
-let _chain = null;
+function buildChain(llm) {
+  return assistantPrompt.pipe(llm).pipe(new StringOutputParser());
+}
 
 const assistantChain = {
-  invoke: async (input) => {
-    if (!_chain) {
-      _chain = assistantPrompt.pipe(getLlm()).pipe(new StringOutputParser());
-    }
-    return _chain.invoke(input);
-  },
+  invoke: async (input, { llm } = {}) => buildChain(llm || getLlm()).invoke(input),
 };
 
 module.exports = { assistantChain };

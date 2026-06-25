@@ -11,18 +11,12 @@ const extractJson = RunnableLambda.from((text) => {
   return JSON.parse(match[0]);
 });
 
-let _chain = null;
+function buildChain(llm) {
+  return memoryExtractionPrompt.pipe(llm).pipe(new StringOutputParser()).pipe(extractJson);
+}
 
 const memoryExtractionChain = {
-  invoke: async (input) => {
-    if (!_chain) {
-      _chain = memoryExtractionPrompt
-        .pipe(getLlm())
-        .pipe(new StringOutputParser())
-        .pipe(extractJson);
-    }
-    return _chain.invoke(input);
-  },
+  invoke: async (input, { llm } = {}) => buildChain(llm || getLlm()).invoke(input),
 };
 
 module.exports = { memoryExtractionChain };

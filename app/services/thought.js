@@ -8,17 +8,23 @@ const {
   formatThreadContext,
 } = require("../llm/format");
 
-async function generateThought({ userInput, memories, personality, profile, threadContext }) {
+async function generateThought(
+  { userInput, memories, personality, profile, threadContext },
+  { llm } = {},
+) {
   try {
     const name = (profile?.name || "User").toString().trim() || "User";
-    const reasoning = await thoughtChain.invoke({
-      userInput,
-      name,
-      profile: formatProfile(profile || {}),
-      personality: formatPersonality(personality),
-      memories: formatMemories(memories),
-      threadContext: formatThreadContext(threadContext || []),
-    });
+    const reasoning = await thoughtChain.invoke(
+      {
+        userInput,
+        name,
+        profile: formatProfile(profile || {}),
+        personality: formatPersonality(personality),
+        memories: formatMemories(memories),
+        threadContext: formatThreadContext(threadContext || []),
+      },
+      { llm },
+    );
     return reasoning;
   } catch {
     return "Memikirkan respons yang tepat...";

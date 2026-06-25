@@ -66,9 +66,7 @@ async function getChatInsights(userId) {
     chatsThisWeek: last7Days.length,
     chatsThisMonth: last30Days,
     avgConfidence:
-      confidenceCount > 0
-        ? Math.round((totalConfidence / confidenceCount) * 100) / 100
-        : 0,
+      confidenceCount > 0 ? Math.round((totalConfidence / confidenceCount) * 100) / 100 : 0,
     dailyActivity: days,
     topEmotions,
   };
@@ -117,43 +115,42 @@ async function getMoodTimeline(userId, days = 30) {
 }
 
 async function getMemoryInsights(userId) {
-  const [totalMemories, byTypeRaw, topImportant, mostRecent, avgAgg] =
-    await Promise.all([
-      prisma.memory.count({ where: { userId, deletedAt: null } }),
-      prisma.memory.groupBy({
-        by: ["type"],
-        where: { userId, deletedAt: null },
-        _count: { _all: true },
-      }),
-      prisma.memory.findMany({
-        where: { userId, deletedAt: null },
-        orderBy: { importanceScore: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          content: true,
-          type: true,
-          importanceScore: true,
-          createdAt: true,
-        },
-      }),
-      prisma.memory.findMany({
-        where: { userId, deletedAt: null },
-        orderBy: { createdAt: "desc" },
-        take: 3,
-        select: {
-          id: true,
-          content: true,
-          type: true,
-          importanceScore: true,
-          createdAt: true,
-        },
-      }),
-      prisma.memory.aggregate({
-        where: { userId, deletedAt: null },
-        _avg: { importanceScore: true },
-      }),
-    ]);
+  const [totalMemories, byTypeRaw, topImportant, mostRecent, avgAgg] = await Promise.all([
+    prisma.memory.count({ where: { userId, deletedAt: null } }),
+    prisma.memory.groupBy({
+      by: ["type"],
+      where: { userId, deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.memory.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { importanceScore: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        content: true,
+        type: true,
+        importanceScore: true,
+        createdAt: true,
+      },
+    }),
+    prisma.memory.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+      select: {
+        id: true,
+        content: true,
+        type: true,
+        importanceScore: true,
+        createdAt: true,
+      },
+    }),
+    prisma.memory.aggregate({
+      where: { userId, deletedAt: null },
+      _avg: { importanceScore: true },
+    }),
+  ]);
 
   const byType = byTypeRaw.map((g) => ({
     type: g.type,
@@ -163,14 +160,13 @@ async function getMemoryInsights(userId) {
   return {
     totalMemories,
     byType,
-    avgImportance:
-      Math.round((avgAgg._avg.importanceScore || 0) * 100) / 100,
+    avgImportance: Math.round((avgAgg._avg.importanceScore || 0) * 100) / 100,
     topImportant,
     mostRecent,
   };
 }
 
-async function getPersonalityInsights(userId) {
+async function getPersonalityInsights(userId, { llm } = {}) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
 
   const [current, recentHistory] = await Promise.all([
@@ -191,13 +187,7 @@ async function getPersonalityInsights(userId) {
   }
 
   // Find biggest change over the window
-  const traits = [
-    "empathy",
-    "logic",
-    "humor",
-    "confidence",
-    "playfulness",
-  ];
+  const traits = ["empathy", "logic", "humor", "confidence", "playfulness"];
   let biggestChange = null;
   let trendByTrait = {};
 
@@ -208,13 +198,9 @@ async function getPersonalityInsights(userId) {
       const delta = last[t] - first[t];
       trendByTrait[t] = {
         delta: Math.round(delta * 100) / 100,
-        direction:
-          delta > 0.02 ? "increasing" : delta < -0.02 ? "decreasing" : "stable",
+        direction: delta > 0.02 ? "increasing" : delta < -0.02 ? "decreasing" : "stable",
       };
-      if (
-        biggestChange === null ||
-        Math.abs(delta) > Math.abs(biggestChange.delta)
-      ) {
+      if (biggestChange === null || Math.abs(delta) > Math.abs(biggestChange.delta)) {
         biggestChange = { trait: t, delta: Math.round(delta * 100) / 100 };
       }
     }
@@ -227,7 +213,7 @@ async function getPersonalityInsights(userId) {
   // LLM summary (best effort, fallback to static)
   let summary = null;
   try {
-    summary = await generatePersonalitySummary(current, trendByTrait);
+    summary = await generatePersonalitySummary(current, trendByTrait, { llm });
   } catch (err) {
     logger.error({
       message: "Personality summary LLM call failed",
@@ -244,7 +230,7 @@ async function getPersonalityInsights(userId) {
   };
 }
 
-async function generatePersonalitySummary(current, trend) {
+async function generatePersonalitySummary(current, trend, { llm } = {}) {
   const { getLlm } = require("../config/openai");
   const { ChatPromptTemplate } = require("@langchain/core/prompts");
   const { StringOutputParser } = require("@langchain/core/output_parsers");
@@ -261,7 +247,7 @@ async function generatePersonalitySummary(current, trend) {
     ["human", `Trait: ${traitsStr}`],
   ]);
 
-  const chain = prompt.pipe(getLlm()).pipe(new StringOutputParser());
+  const chain = prompt.pipe(llm || getLlm()).pipe(new StringOutputParser());
   return await chain.invoke({});
 }
 
@@ -269,7 +255,8 @@ function staticSummary(current, trend) {
   const top = Object.entries(trend)
     .sort((a, b) => Math.abs(b[1].delta) - Math.abs(a[1].delta))
     .slice(0, 1)[0];
-  if (!top) return "Personalitas twin kamu masih dalam tahap awal. Terus ngobrol untuk membentuk karakter.";
+  if (!top)
+    return "Personalitas twin kamu masih dalam tahap awal. Terus ngobrol untuk membentuk karakter.";
   return `Trait terkuat kamu adalah ${top[0]} (${(current[top[0]] * 100).toFixed(0)}%). Digital twin kamu mencerminkan gaya kamu yang ${top[1].direction === "increasing" ? "semakin berkembang" : "stabil"} di area ini.`;
 }
 
@@ -345,9 +332,7 @@ async function getMemoryGraph(userId, options = {}) {
     // Limit to top K neighbors per node
     similarities.sort((a, b) => b.sim - a.sim);
     if (similarities.length > maxNeighbors) {
-      const allowed = new Set(
-        similarities.slice(0, maxNeighbors).map((s) => s.id),
-      );
+      const allowed = new Set(similarities.slice(0, maxNeighbors).map((s) => s.id));
       // Remove excess edges
       for (let k = edges.length - 1; k >= 0; k--) {
         if (edges[k].source === a.id && !allowed.has(edges[k].target)) {

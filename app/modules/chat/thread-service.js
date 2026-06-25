@@ -66,8 +66,7 @@ async function updateThread(threadId, userId, { title }) {
 
 function generateShareSlug() {
   // 16 chars, URL-safe
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let slug = "";
   for (let i = 0; i < 16; i++) {
     slug += chars[Math.floor(Math.random() * chars.length)];
@@ -167,7 +166,7 @@ async function deleteThread(threadId, userId) {
   });
 }
 
-async function generateThreadTitle(threadId, userId) {
+async function generateThreadTitle(threadId, userId, { llm: providedLlm } = {}) {
   try {
     // Fetch the thread and its first 2 conversations
     const conversations = await prisma.conversation.findMany({
@@ -187,12 +186,14 @@ async function generateThreadTitle(threadId, userId) {
     }
 
     const firstMsg = conversations[0].message;
-    const combinedMessages = conversations.map(c => `User: ${c.message}\nRespon: ${c.response}`).join("\n\n");
+    const combinedMessages = conversations
+      .map((c) => `User: ${c.message}\nRespon: ${c.response}`)
+      .join("\n\n");
 
     let title = "";
 
     try {
-      const llm = getLlm();
+      const llm = providedLlm || getLlm();
       const prompt = ChatPromptTemplate.fromMessages([
         [
           "system",

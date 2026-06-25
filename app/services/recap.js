@@ -14,7 +14,7 @@ function startOfDay(d) {
   return x;
 }
 
-async function generateRecap(userId, days) {
+async function generateRecap(userId, days, { llm } = {}) {
   const start = startOfDay(new Date(Date.now() - (days - 1) * 86400000));
   const conversations = await prisma.conversation.findMany({
     where: {
@@ -53,8 +53,7 @@ async function generateRecap(userId, days) {
   const digest = conversations
     .slice(-maxDigest)
     .map(
-      (c, i) =>
-        `${i + 1}. [${c.emotion?.emotion || "neutral"}] User: ${c.message.slice(0, 200)}`,
+      (c, i) => `${i + 1}. [${c.emotion?.emotion || "neutral"}] User: ${c.message.slice(0, 200)}`,
     )
     .join("\n");
 
@@ -80,7 +79,7 @@ TOPICS: karier, deadline, refleksi diri, rencana masa depan`,
       ],
     ]);
 
-    const chain = prompt.pipe(getLlm()).pipe(new StringOutputParser());
+    const chain = prompt.pipe(llm || getLlm()).pipe(new StringOutputParser());
     const result = await chain.invoke({});
 
     const summaryMatch = result.match(/SUMMARY:\s*([\s\S]+?)(?=TOPICS:|$)/i);

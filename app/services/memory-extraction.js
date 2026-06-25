@@ -32,15 +32,14 @@ function normalize(raw, seen) {
   return out;
 }
 
-async function extractMemories({ userInput, emotion }) {
+async function extractMemories({ userInput, emotion }, { llm } = {}) {
   try {
     const emotionLabel = emotion?.emotion || "neutral";
     const emotionConfidence = emotion?.confidence ?? 0.5;
-    const result = await memoryExtractionChain.invoke({
-      userInput,
-      emotionLabel,
-      emotionConfidence,
-    });
+    const result = await memoryExtractionChain.invoke(
+      { userInput, emotionLabel, emotionConfidence },
+      { llm },
+    );
     const raw = Array.isArray(result?.memories) ? result.memories : [];
     const seen = new Set();
     return normalize(raw, seen);

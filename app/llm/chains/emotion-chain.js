@@ -12,18 +12,12 @@ const extractJson = RunnableLambda.from((text) => {
   return JSON.parse(match[0]);
 });
 
-let _chain = null;
+function buildChain(llm) {
+  return emotionPrompt.pipe(llm).pipe(new StringOutputParser()).pipe(extractJson);
+}
 
 const emotionChain = {
-  invoke: async (input) => {
-    if (!_chain) {
-      _chain = emotionPrompt
-        .pipe(getLlm())
-        .pipe(new StringOutputParser())
-        .pipe(extractJson);
-    }
-    return _chain.invoke(input);
-  },
+  invoke: async (input, { llm } = {}) => buildChain(llm || getLlm()).invoke(input),
 };
 
 module.exports = { emotionChain };
