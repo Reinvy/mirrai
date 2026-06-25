@@ -84,12 +84,10 @@ async function processChat(userId, message, threadId = null, attachments = []) {
   }
 
   let activeThreadId = threadId;
-  let isNewThread = false;
 
   if (!activeThreadId) {
     const newThread = await createThread(userId);
     activeThreadId = newThread.id;
-    isNewThread = true;
   }
 
   const [emotion, memories, personality, profile, threadContext, personalityTrend] =
@@ -157,22 +155,28 @@ async function processChat(userId, message, threadId = null, attachments = []) {
 
   const updatedPersonality = await getPersonality(userId);
 
-  if (isNewThread) {
-    generateThreadTitle(activeThreadId, userId, { llm }).catch((err) => {
-      logger.error({ message: "Error generating thread title in background", error: err.message });
-    });
-  }
+  const convCount = await prisma.conversation.count({
+    where: { threadId: activeThreadId, deletedAt: null },
+  });
+  const titleResult = await generateThreadTitle(activeThreadId, userId, {
+    llm,
+    conversationCount: convCount,
+  });
 
   const duration = Date.now() - start;
   logger.debug({ message: "Chat pipeline done", userId, duration });
 
-  return {
+  const result = {
     response,
     reasoning: reasoning || null,
     emotion,
     personality_snapshot: updatedPersonality,
     threadId: activeThreadId,
   };
+  if (titleResult.changed) {
+    result.title = titleResult.title;
+  }
+  return result;
 }
 
 async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } = {}) {

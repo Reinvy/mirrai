@@ -37,6 +37,30 @@ jest.mock("../app/services/evolution", () => ({
   evolvePersonality: jest.fn().mockResolvedValue({}),
 }));
 
+jest.mock("../app/modules/chat/thread-service", () => {
+  const originalModule = jest.requireActual("../app/modules/chat/thread-service");
+  return {
+    ...originalModule,
+    generateThreadTitle: jest
+      .fn()
+      .mockImplementation(async (threadId, userId, { conversationCount } = {}) => {
+        const { prisma } = require("../app/config/db");
+        if (conversationCount !== undefined && ![1, 3].includes(conversationCount)) {
+          return { changed: false };
+        }
+        const title =
+          conversationCount === 3
+            ? "Topik Regen"
+            : "Topik Pertama Otomatis";
+        await prisma.thread.update({
+          where: { id: threadId },
+          data: { title },
+        });
+        return { changed: true, title };
+      }),
+  };
+});
+
 const app = require("../app");
 
 describe("Chat API", () => {
@@ -213,6 +237,29 @@ describe("Chat API", () => {
       } finally {
         response.streamResponse.__resetImpl();
       }
+    });
+
+    it("should emit a `title` event before `done` for the first conversation in a new thread", async () => {
+      const res = await request(app)
+        .post("/api/chat/stream")
+        .set("Authorization", `Bearer ${authToken}`)
+        .set("Accept", "text/event-stream")
+        .send({ message: "Pesan pembuka untuk auto title" });
+
+      expect(res.status).toBe(200);
+
+      const lines = res.text.split("\n").filter((l) => l.startsWith("data: "));
+      const events = lines.map((l) => JSON.parse(l.slice(6)));
+
+      const titleEvents = events.filter((e) => e.event === "title");
+      expect(titleEvents.length).toBe(1);
+      expect(titleEvents[0].title).toBe("Topik Pertama Otomatis");
+      expect(titleEvents[0].threadId).toBeDefined();
+
+      const titleIdx = events.findIndex((e) => e.event === "title");
+      const doneIdx = events.findIndex((e) => e.event === "done");
+      expect(titleIdx).toBeGreaterThanOrEqual(0);
+      expect(doneIdx).toBeGreaterThan(titleIdx);
     });
   });
 });

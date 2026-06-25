@@ -8,6 +8,8 @@ const { logger } = require("../../config/logger");
 const { AppError } = require("../../utils/app-error");
 
 const MAX_THREAD_TITLE_LEN = 100;
+const TITLE_REGEN_COUNTS = new Set([1, 3]);
+const TITLE_SOURCE_COUNTS = { 1: 1, 3: 3 };
 
 async function createThread(userId, title = "Percakapan Baru") {
   const cleanTitle = (title || "Percakapan Baru").toString().trim();
@@ -166,9 +168,23 @@ async function deleteThread(threadId, userId) {
   });
 }
 
-async function generateThreadTitle(threadId, userId, { llm: providedLlm } = {}) {
+async function generateThreadTitle(threadId, userId, { llm: providedLlm, conversationCount } = {}) {
   try {
-    // Fetch the thread and its first 2 conversations
+    const count = Number(conversationCount);
+    if (!TITLE_REGEN_COUNTS.has(count)) {
+      return { changed: false };
+    }
+
+    const take = TITLE_SOURCE_COUNTS[count];
+
+    const thread = await prisma.thread.findFirst({
+      where: { id: threadId, userId, deletedAt: null },
+      select: { title: true },
+    });
+    if (!thread) {
+      return { changed: false };
+    }
+
     const conversations = await prisma.conversation.findMany({
       where: {
         threadId,
@@ -178,11 +194,11 @@ async function generateThreadTitle(threadId, userId, { llm: providedLlm } = {}) 
       orderBy: {
         createdAt: "asc",
       },
-      take: 2,
+      take,
     });
 
     if (conversations.length === 0) {
-      return;
+      return { changed: false };
     }
 
     const firstMsg = conversations[0].message;
@@ -205,21 +221,27 @@ async function generateThreadTitle(threadId, userId, { llm: providedLlm } = {}) 
       const chain = prompt.pipe(llm).pipe(new StringOutputParser());
       const res = await chain.invoke({ conversation: combinedMessages });
       title = res.replace(/["']/g, "").trim();
+      if (title.length > MAX_THREAD_TITLE_LEN) {
+        title = title.substring(0, MAX_THREAD_TITLE_LEN);
+      }
     } catch (llmError) {
       logger.error({ message: "Failed to generate title using LLM", error: llmError.message });
-      // Fallback
       title = firstMsg.length > 25 ? firstMsg.substring(0, 25) + "..." : firstMsg;
     }
 
-    if (title) {
-      await prisma.thread.update({
-        where: { id: threadId },
-        data: { title },
-      });
-      logger.debug({ message: "Thread title generated successfully", threadId, title });
+    if (!title || title === thread.title) {
+      return { changed: false, title: thread.title };
     }
+
+    await prisma.thread.update({
+      where: { id: threadId },
+      data: { title },
+    });
+    logger.debug({ message: "Thread title generated successfully", threadId, title });
+    return { changed: true, title };
   } catch (error) {
     logger.error({ message: "Error in generateThreadTitle", error: error.message });
+    return { changed: false };
   }
 }
 

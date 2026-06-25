@@ -23,13 +23,23 @@ jest.mock("../app/modules/chat/thread-service", () => {
   const originalModule = jest.requireActual("../app/modules/chat/thread-service");
   return {
     ...originalModule,
-    generateThreadTitle: jest.fn().mockImplementation(async (threadId, userId) => {
-      const { prisma } = require("../app/config/db");
-      await prisma.thread.update({
-        where: { id: threadId },
-        data: { title: "Topik Percakapan Otomatis" },
-      });
-    }),
+    generateThreadTitle: jest
+      .fn()
+      .mockImplementation(async (threadId, userId, { conversationCount } = {}) => {
+        const { prisma } = require("../app/config/db");
+        if (conversationCount !== undefined && ![1, 3].includes(conversationCount)) {
+          return { changed: false };
+        }
+        const title =
+          conversationCount === 3
+            ? "Topik Regen Percakapan"
+            : "Topik Percakapan Otomatis";
+        await prisma.thread.update({
+          where: { id: threadId },
+          data: { title },
+        });
+        return { changed: true, title };
+      }),
   };
 });
 
