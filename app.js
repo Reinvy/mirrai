@@ -72,17 +72,11 @@ app.use(
 );
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
-        workerSrc: ["'self'", "blob:"],
-        fontSrc: ["'self'", "data:", "https:"],
-      },
-    },
+    // CSP is intentionally omitted: this is a JSON API server, not an HTML
+    // document. CSP on JSON responses is a no-op for security but surfaces as
+    // a `script-src 'unsafe-eval'` warning in the frontend's DevTools "Issues"
+    // panel because Chrome aggregates CSP across same-origin responses. The
+    // frontend (Next.js) is responsible for setting its own CSP if needed.
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     hsts:
       process.env.NODE_ENV === "production"
