@@ -23,15 +23,10 @@ function getModelOnlyChain() {
 }
 
 async function* streamChat(input) {
-  let lastText = "";
   const stream = await getChain().stream(input);
   for await (const chunk of stream) {
-    if (typeof chunk !== "string") continue;
-    const delta = chunk.slice(lastText.length);
-    lastText = chunk;
-    if (delta) yield delta;
+    if (typeof chunk === "string" && chunk) yield chunk;
   }
-  return lastText;
 }
 
 const chatChain = {
@@ -59,10 +54,7 @@ async function invokeWithImages({ systemMessage, userText, attachments }) {
   }
   content.push({ type: "text", text: userText || "" });
 
-  const messages = [
-    { role: "system", content: systemMessage },
-    new HumanMessage({ content }),
-  ];
+  const messages = [{ role: "system", content: systemMessage }, new HumanMessage({ content })];
 
   const result = await llm.invoke(messages);
   return typeof result.content === "string"
@@ -88,13 +80,9 @@ async function* streamWithImages({ systemMessage, userText, attachments }) {
   }
   content.push({ type: "text", text: userText || "" });
 
-  const messages = [
-    { role: "system", content: systemMessage },
-    new HumanMessage({ content }),
-  ];
+  const messages = [{ role: "system", content: systemMessage }, new HumanMessage({ content })];
 
   const stream = await llm.stream(messages);
-  let lastText = "";
   for await (const chunk of stream) {
     const text =
       typeof chunk.content === "string"
@@ -102,10 +90,7 @@ async function* streamWithImages({ systemMessage, userText, attachments }) {
         : Array.isArray(chunk.content)
           ? chunk.content.map((c) => (typeof c === "string" ? c : c.text || "")).join("")
           : "";
-    if (!text) continue;
-    const delta = text.slice(lastText.length);
-    lastText = text;
-    if (delta) yield delta;
+    if (text) yield text;
   }
 }
 

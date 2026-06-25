@@ -6,29 +6,37 @@ const request = require("supertest");
 
 // Mock the AI chain calls to avoid OpenRouter dependency in tests
 jest.mock("../app/services/emotion", () => ({
-  detectEmotion: jest
-    .fn()
-    .mockResolvedValue({ emotion: "neutral", confidence: 0.8 }),
+  detectEmotion: jest.fn().mockResolvedValue({ emotion: "neutral", confidence: 0.8 }),
 }));
 jest.mock("../app/services/thought", () => ({
-  generateThought: jest
-    .fn()
-    .mockResolvedValue("Memikirkan respons yang tepat..."),
+  generateThought: jest.fn().mockResolvedValue("Memikirkan respons yang tepat..."),
 }));
-jest.mock("../app/services/decision", () => ({
-  generateDecision: jest
-    .fn()
-    .mockResolvedValue("Ini adalah respons test dari MirrAI."),
-  streamDecision: (() => {
-    async function* gen() {
-      const text = "Ini adalah respons test dari MirrAI.";
-      for (const word of text.split(" ")) {
-        yield word + " ";
-      }
+jest.mock("../app/services/decision", () => {
+  const defaultText = "Ini adalah respons test dari MirrAI.";
+
+  async function* defaultGen() {
+    for (const word of defaultText.split(" ")) {
+      yield word + " ";
     }
-    return gen;
-  })(),
-}));
+  }
+
+  const state = { impl: defaultGen };
+
+  function streamDecision() {
+    return state.impl();
+  }
+  streamDecision.__setImpl = (fn) => {
+    state.impl = fn;
+  };
+  streamDecision.__resetImpl = () => {
+    state.impl = defaultGen;
+  };
+
+  return {
+    generateDecision: jest.fn().mockResolvedValue(defaultText),
+    streamDecision,
+  };
+});
 jest.mock("../app/services/evolution", () => ({
   evolvePersonality: jest.fn().mockResolvedValue({}),
 }));
@@ -40,9 +48,7 @@ describe("Chat API", () => {
 
   beforeAll(async () => {
     const name = `chatuser_${Date.now()}`;
-    await request(app)
-      .post("/api/auth/register")
-      .send({ name, password: "testpass123" });
+    await request(app).post("/api/auth/register").send({ name, password: "testpass123" });
     const loginRes = await request(app)
       .post("/api/auth/login")
       .send({ name, password: "testpass123" });
@@ -78,9 +84,7 @@ describe("Chat API", () => {
     });
 
     it("should reject unauthenticated request", async () => {
-      const res = await request(app)
-        .post("/api/chat")
-        .send({ message: "test" });
+      const res = await request(app).post("/api/chat").send({ message: "test" });
       expect(res.status).toBe(401);
     });
   });
@@ -126,10 +130,37 @@ describe("Chat API", () => {
     });
 
     it("should reject unauthenticated request", async () => {
-      const res = await request(app)
-        .post("/api/chat/stream")
-        .send({ message: "test" });
+      const res = await request(app).post("/api/chat/stream").send({ message: "test" });
       expect(res.status).toBe(401);
+    });
+
+    it("should preserve text when LLM streams one char at a time (regression)", async () => {
+      const text = "Hai, Bro Programmer.";
+      const decision = require("../app/services/decision");
+      decision.streamDecision.__setImpl(async function* () {
+        for (const ch of text) yield ch;
+      });
+
+      try {
+        const res = await request(app)
+          .post("/api/chat/stream")
+          .set("Authorization", `Bearer ${authToken}`)
+          .set("Accept", "text/event-stream")
+          .send({ message: "halo single-char test" });
+
+        expect(res.status).toBe(200);
+
+        const lines = res.text.split("\n").filter((l) => l.startsWith("data: "));
+        const events = lines.map((l) => JSON.parse(l.slice(6)));
+
+        const done = events.find((e) => e.event === "done");
+        const deltas = events.filter((e) => e.event === "delta").map((e) => e.text);
+
+        expect(deltas.join("")).toBe(text);
+        expect(done.response).toBe(text);
+      } finally {
+        decision.streamDecision.__resetImpl();
+      }
     });
   });
 });
