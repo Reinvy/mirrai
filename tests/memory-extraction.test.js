@@ -11,24 +11,24 @@ jest.mock("../app/services/emotion", () => ({
 jest.mock("../app/services/thought", () => ({
   generateThought: jest.fn().mockResolvedValue("Memikirkan respons..."),
 }));
-jest.mock("../app/services/decision", () => {
+jest.mock("../app/services/response", () => {
   const defaultText = "Respons test.";
   async function* defaultGen() {
     for (const w of defaultText.split(" ")) yield w + " ";
   }
   const state = { impl: defaultGen };
-  function streamDecision() {
+  function streamResponse() {
     return state.impl();
   }
-  streamDecision.__setImpl = (fn) => {
+  streamResponse.__setImpl = (fn) => {
     state.impl = fn;
   };
-  streamDecision.__resetImpl = () => {
+  streamResponse.__resetImpl = () => {
     state.impl = defaultGen;
   };
   return {
-    generateDecision: jest.fn().mockResolvedValue(defaultText),
-    streamDecision,
+    generateResponse: jest.fn().mockResolvedValue(defaultText),
+    streamResponse,
   };
 });
 jest.mock("../app/services/evolution", () => ({

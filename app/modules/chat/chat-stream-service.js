@@ -3,31 +3,60 @@
 const { prisma } = require("../../config/db");
 const { detectEmotion } = require("../../services/emotion");
 const { generateThought } = require("../../services/thought");
-const { streamDecision } = require("../../services/decision");
+const { streamResponse } = require("../../services/response");
 const { evolvePersonality } = require("../../services/evolution");
 const { extractMemories } = require("../../services/memory-extraction");
 const { saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
+const { formatPersonalityTrend } = require("../../llm/format");
 const { createThread, generateThreadTitle } = require("./thread-service");
 const { logger } = require("../../config/logger");
 
-/**
- * Run the 8-step chat pipeline with streaming final response.
- * Yields SSE event payloads (already JSON-stringified) to be written to res.
- *
- * Step order:
- *  1. Create thread if needed
- *  2-3. Concurrently: emotion, memory, personality
- *  4. Thought
- *  5. Stream decision (one event per token)
- *  6-8. Save conversation, save memory, evolve personality (after stream)
- *  +. Background thread title generation for new thread
- */
+const THREAD_CONTEXT_LIMIT = 5;
+
+async function getProfile(userId) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, bio: true },
+  });
+}
+
+async function getRecentThreadMessages(threadId, userId, limit = THREAD_CONTEXT_LIMIT) {
+  if (!threadId) return [];
+  return prisma.conversation.findMany({
+    where: { userId, threadId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { message: true, response: true, createdAt: true },
+  });
+}
+
+async function getPersonalityTrend(userId, lookback = 5) {
+  try {
+    const history = await prisma.personalityHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: lookback + 1,
+      select: {
+        empathy: true,
+        logic: true,
+        humor: true,
+        confidence: true,
+        playfulness: true,
+        createdAt: true,
+      },
+    });
+    return formatPersonalityTrend(history, lookback);
+  } catch (err) {
+    logger.warn({ message: "Failed to compute personality trend", error: err.message });
+    return "";
+  }
+}
+
 async function* processChatStream(userId, message, threadId = null, attachments = []) {
   const start = Date.now();
   logger.debug({ message: "Chat stream pipeline start", userId, threadId });
 
-  // Check quota (free tier 50/day)
   const { checkAndIncrementQuota } = require("../../services/quota");
   try {
     await checkAndIncrementQuota(userId);
@@ -45,36 +74,43 @@ async function* processChatStream(userId, message, threadId = null, attachments 
     isNewThread = true;
   }
 
-  // Steps 2-3 in parallel
-  const [emotion, memories, personality] = await Promise.all([
-    detectEmotion(message),
-    retrieveMemorySafe({ userId, query: message, limit: 5 }),
-    getPersonality(userId),
-  ]);
+  const [emotion, memories, personality, profile, threadContext, personalityTrend] =
+    await Promise.all([
+      detectEmotion(message),
+      retrieveMemorySafe({ userId, query: message, limit: 5 }),
+      getPersonality(userId),
+      getProfile(userId),
+      getRecentThreadMessages(activeThreadId, userId),
+      getPersonalityTrend(userId),
+    ]);
 
   yield JSON.stringify({ event: "meta", threadId: activeThreadId, emotion });
 
-  // Step 4 & extraction-prep: Thought and Memory Extraction run in parallel
   const [reasoning, extractedMemories] = await Promise.all([
     generateThought({
       userInput: message,
       memories,
       personality,
+      profile,
+      threadContext,
     }),
     extractMemories({ userInput: message, emotion }),
   ]);
 
   yield JSON.stringify({ event: "reasoning", reasoning });
 
-  // Step 5 — stream
   let fullResponse = "";
   try {
-    for await (const delta of streamDecision({
+    for await (const delta of streamResponse({
       userInput: message,
+      name: profile?.name,
+      profile,
+      personality,
+      personalityTrend,
       emotion,
       memories,
-      personality,
       reasoning,
+      threadContext,
       attachments,
     })) {
       fullResponse += delta;
@@ -82,7 +118,7 @@ async function* processChatStream(userId, message, threadId = null, attachments 
     }
   } catch (err) {
     logger.error({
-      message: "Stream decision failed",
+      message: "Stream response failed",
       userId,
       error: err.message,
     });
@@ -90,7 +126,6 @@ async function* processChatStream(userId, message, threadId = null, attachments 
     return;
   }
 
-  // Steps 6-8: save conversation, save memory, evolve personality
   try {
     await prisma.conversation.create({
       data: {
@@ -170,4 +205,4 @@ async function retrieveMemorySafe(args) {
   }
 }
 
-module.exports = { processChatStream };
+module.exports = { processChatStream, getRecentThreadMessages, getProfile };

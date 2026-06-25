@@ -1,23 +1,28 @@
 "use strict";
 
 const { StringOutputParser } = require("@langchain/core/output_parsers");
-const { HumanMessage } = require("@langchain/core/messages");
+const { ChatPromptTemplate } = require("@langchain/core/prompts");
+const { HumanMessage, SystemMessage } = require("@langchain/core/messages");
 const { getLlm } = require("../../config/openai");
-const { chatPrompt } = require("../prompts/chat-prompt");
+
+const SIMPLE_PROMPT = ChatPromptTemplate.fromMessages([
+  ["system", "{systemMessage}"],
+  ["human", "{userInput}"],
+]);
 
 let _chain = null;
 let _modelOnlyChain = null;
 
 function getChain() {
   if (!_chain) {
-    _chain = chatPrompt.pipe(getLlm()).pipe(new StringOutputParser());
+    _chain = SIMPLE_PROMPT.pipe(getLlm()).pipe(new StringOutputParser());
   }
   return _chain;
 }
 
 function getModelOnlyChain() {
   if (!_modelOnlyChain) {
-    _modelOnlyChain = chatPrompt.pipe(getLlm());
+    _modelOnlyChain = SIMPLE_PROMPT.pipe(getLlm());
   }
   return _modelOnlyChain;
 }
@@ -34,10 +39,6 @@ const chatChain = {
   stream: streamChat,
 };
 
-/**
- * Multimodal variant: invoke LLM with text + image attachments.
- * Input: { systemMessage: string, userText: string, attachments: [{ type: 'image', dataUrl: string, mimeType: string }] }
- */
 async function invokeWithImages({ systemMessage, userText, attachments }) {
   const llm = getLlm();
   const content = [];
@@ -54,7 +55,7 @@ async function invokeWithImages({ systemMessage, userText, attachments }) {
   }
   content.push({ type: "text", text: userText || "" });
 
-  const messages = [{ role: "system", content: systemMessage }, new HumanMessage({ content })];
+  const messages = [new SystemMessage(systemMessage), new HumanMessage({ content })];
 
   const result = await llm.invoke(messages);
   return typeof result.content === "string"
@@ -80,7 +81,7 @@ async function* streamWithImages({ systemMessage, userText, attachments }) {
   }
   content.push({ type: "text", text: userText || "" });
 
-  const messages = [{ role: "system", content: systemMessage }, new HumanMessage({ content })];
+  const messages = [new SystemMessage(systemMessage), new HumanMessage({ content })];
 
   const stream = await llm.stream(messages);
   for await (const chunk of stream) {

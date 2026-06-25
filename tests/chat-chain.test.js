@@ -31,11 +31,8 @@ const { streamChat, streamWithImages } = require("../app/llm/chains/chat-chain")
 
 describe("chat-chain streamChat", () => {
   const baseInput = {
+    systemMessage: "system",
     userInput: "test",
-    personality: "empathy: 50%",
-    emotion: "neutral (confidence: 0.5)",
-    memories: "none",
-    reasoning: "none",
   };
 
   it("yields deltas verbatim when LLM streams one char at a time (regression for garbled output bug)", async () => {

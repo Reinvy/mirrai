@@ -7,19 +7,13 @@ const { prisma } = require("../app/config/db");
 
 // Mock the AI chain calls to avoid OpenRouter dependency in tests
 jest.mock("../app/services/emotion", () => ({
-  detectEmotion: jest
-    .fn()
-    .mockResolvedValue({ emotion: "happy", confidence: 0.8 }),
+  detectEmotion: jest.fn().mockResolvedValue({ emotion: "happy", confidence: 0.8 }),
 }));
 jest.mock("../app/services/thought", () => ({
-  generateThought: jest
-    .fn()
-    .mockResolvedValue("Memikirkan respons yang tepat..."),
+  generateThought: jest.fn().mockResolvedValue("Memikirkan respons yang tepat..."),
 }));
-jest.mock("../app/services/decision", () => ({
-  generateDecision: jest
-    .fn()
-    .mockResolvedValue("Ini adalah respons test dari MirrAI."),
+jest.mock("../app/services/response", () => ({
+  generateResponse: jest.fn().mockResolvedValue("Ini adalah respons test dari MirrAI."),
 }));
 
 const app = require("../app");
@@ -31,9 +25,7 @@ describe("Personality History API", () => {
 
   beforeAll(async () => {
     userName = `histuser_${Date.now()}`;
-    await request(app)
-      .post("/api/auth/register")
-      .send({ name: userName, password: "testpass123" });
+    await request(app).post("/api/auth/register").send({ name: userName, password: "testpass123" });
     const loginRes = await request(app)
       .post("/api/auth/login")
       .send({ name: userName, password: "testpass123" });

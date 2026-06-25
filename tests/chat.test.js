@@ -11,7 +11,7 @@ jest.mock("../app/services/emotion", () => ({
 jest.mock("../app/services/thought", () => ({
   generateThought: jest.fn().mockResolvedValue("Memikirkan respons yang tepat..."),
 }));
-jest.mock("../app/services/decision", () => {
+jest.mock("../app/services/response", () => {
   const defaultText = "Ini adalah respons test dari MirrAI.";
 
   async function* defaultGen() {
@@ -22,19 +22,19 @@ jest.mock("../app/services/decision", () => {
 
   const state = { impl: defaultGen };
 
-  function streamDecision() {
+  function streamResponse() {
     return state.impl();
   }
-  streamDecision.__setImpl = (fn) => {
+  streamResponse.__setImpl = (fn) => {
     state.impl = fn;
   };
-  streamDecision.__resetImpl = () => {
+  streamResponse.__resetImpl = () => {
     state.impl = defaultGen;
   };
 
   return {
-    generateDecision: jest.fn().mockResolvedValue(defaultText),
-    streamDecision,
+    generateResponse: jest.fn().mockResolvedValue(defaultText),
+    streamResponse,
   };
 });
 jest.mock("../app/services/evolution", () => ({
@@ -136,8 +136,8 @@ describe("Chat API", () => {
 
     it("should preserve text when LLM streams one char at a time (regression)", async () => {
       const text = "Hai, Bro Programmer.";
-      const decision = require("../app/services/decision");
-      decision.streamDecision.__setImpl(async function* () {
+      const response = require("../app/services/response");
+      response.streamResponse.__setImpl(async function* () {
         for (const ch of text) yield ch;
       });
 
@@ -159,7 +159,7 @@ describe("Chat API", () => {
         expect(deltas.join("")).toBe(text);
         expect(done.response).toBe(text);
       } finally {
-        decision.streamDecision.__resetImpl();
+        response.streamResponse.__resetImpl();
       }
     });
   });

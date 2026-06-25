@@ -3,7 +3,7 @@
 const { memoryExtractionChain } = require("../llm/chains/memory-extraction-chain");
 const { logger } = require("../config/logger");
 
-const VALID_TYPES = new Set(["SHORT_TERM", "LONG_TERM", "SEMANTIC", "EMOTIONAL"]);
+const VALID_TYPES = new Set(["LONG_TERM", "SEMANTIC", "EMOTIONAL"]);
 const MAX_EXTRACTIONS = 3;
 const MIN_SCORE = 0.1;
 const MAX_SCORE = 1.0;

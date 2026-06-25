@@ -1,29 +1,23 @@
 "use strict";
 
 const { thoughtChain } = require("../llm/chains/thought-chain");
+const {
+  formatPersonality,
+  formatMemories,
+  formatProfile,
+  formatThreadContext,
+} = require("../llm/format");
 
-function formatPersonality(personality) {
-  return Object.entries(personality)
-    .filter(([k]) =>
-      ["empathy", "logic", "humor", "confidence", "playfulness"].includes(k),
-    )
-    .map(([k, v]) => `${k}: ${(v * 100).toFixed(0)}%`)
-    .join(", ");
-}
-
-function formatMemories(memories) {
-  if (!memories || memories.length === 0) return "Belum ada memory relevan";
-  return memories
-    .map((m, i) => `${i + 1}. [${m.type}] ${m.content}`)
-    .join("\n");
-}
-
-async function generateThought({ userInput, memories, personality }) {
+async function generateThought({ userInput, memories, personality, profile, threadContext }) {
   try {
+    const name = (profile?.name || "User").toString().trim() || "User";
     const reasoning = await thoughtChain.invoke({
       userInput,
+      name,
+      profile: formatProfile(profile || {}),
       personality: formatPersonality(personality),
       memories: formatMemories(memories),
+      threadContext: formatThreadContext(threadContext || []),
     });
     return reasoning;
   } catch {

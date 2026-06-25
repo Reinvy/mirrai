@@ -5,15 +5,13 @@ require("./setup");
 const request = require("supertest");
 
 jest.mock("../app/services/emotion", () => ({
-  detectEmotion: jest
-    .fn()
-    .mockResolvedValue({ emotion: "happy", confidence: 0.8 }),
+  detectEmotion: jest.fn().mockResolvedValue({ emotion: "happy", confidence: 0.8 }),
 }));
 jest.mock("../app/services/thought", () => ({
   generateThought: jest.fn().mockResolvedValue("mocked thought"),
 }));
-jest.mock("../app/services/decision", () => ({
-  generateDecision: jest.fn().mockResolvedValue("mocked decision"),
+jest.mock("../app/services/response", () => ({
+  generateResponse: jest.fn().mockResolvedValue("mocked response"),
 }));
 
 const app = require("../app");

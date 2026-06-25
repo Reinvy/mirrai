@@ -73,14 +73,26 @@ Client → Express → Module Router → Controller → Service → Prisma / LLM
 
 `POST /api/chat` menjalankan pipeline 8 langkah (lihat `app/modules/chat/chat-service.js`):
 
-1. Create thread baru (jika belum ada `threadId`)
-2. **Concurrent:** detect emotion, retrieve memory, get personality
-3. Generate thought (internal reasoning)
-4. Generate decision (final response)
+1. Create thread baru (jika belum ada `threadId`) + cek quota
+2. **Concurrent:** detect emotion, retrieve long-term memory, get personality, get recent thread context (5 pesan terakhir), get personality trend
+3. **Concurrent:** generate internal thought (sudut pandang user) + extract memory baru
+4. Generate response (sebagai digital twin, dengan profil + thread context)
 5. Save conversation
-6. Save memory (SHORT_TERM, importance 0.4–0.7)
-7. Evolve personality (delta dari emotion weights)
+6. Save memory (1 SHORT_TERM raw + N extracted LONG_TERM/SEMANTIC/EMOTIONAL)
+7. Evolve personality (emotion delta + memory-pattern drift, max ±0.01/turn)
 8. Generate thread title (background, LLM)
+
+### Digital Twin Identity
+
+System prompt digital twin dibangun dari 7 blok konsisten (lihat `app/llm/prompts/chat-prompt.js`):
+
+1. **Profil** — nama & bio user
+2. **Personality** — 5 traits + style rules hasil pemetaan otomatis
+3. **Emosi** — label + confidence + cara interpretasi
+4. **Memory relevan** — hasil semantic search
+5. **Konteks thread** — 5 pesan terakhir percakapan di thread ini
+6. **Internal reasoning** — apa yang user pikirkan sebelum menjawab
+7. **Aturan respons** — bahasa, sudut pandang, larangan menyebut AI
 
 ## Struktur Project
 

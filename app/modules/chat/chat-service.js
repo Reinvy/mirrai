@@ -3,20 +3,61 @@
 const { prisma } = require("../../config/db");
 const { detectEmotion } = require("../../services/emotion");
 const { generateThought } = require("../../services/thought");
-const { generateDecision } = require("../../services/decision");
+const { generateResponse } = require("../../services/response");
 const { evolvePersonality } = require("../../services/evolution");
 const { extractMemories } = require("../../services/memory-extraction");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
+const { formatPersonalityTrend } = require("../../llm/format");
 const { createThread, generateThreadTitle } = require("./thread-service");
 const { assistantChain } = require("../../llm/chains/assistant-chain");
 const { logger } = require("../../config/logger");
+
+const THREAD_CONTEXT_LIMIT = 5;
+
+async function getProfile(userId) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, bio: true },
+  });
+}
+
+async function getRecentThreadMessages(threadId, userId, limit = THREAD_CONTEXT_LIMIT) {
+  if (!threadId) return [];
+  return prisma.conversation.findMany({
+    where: { userId, threadId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { message: true, response: true, createdAt: true },
+  });
+}
+
+async function getPersonalityTrend(userId, lookback = 5) {
+  try {
+    const history = await prisma.personalityHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: lookback + 1,
+      select: {
+        empathy: true,
+        logic: true,
+        humor: true,
+        confidence: true,
+        playfulness: true,
+        createdAt: true,
+      },
+    });
+    return formatPersonalityTrend(history, lookback);
+  } catch (err) {
+    logger.warn({ message: "Failed to compute personality trend", error: err.message });
+    return "";
+  }
+}
 
 async function processChat(userId, message, threadId = null, attachments = []) {
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId, threadId });
 
-  // Check quota (free tier 50/day)
   const { checkAndIncrementQuota } = require("../../services/quota");
   await checkAndIncrementQuota(userId);
 
@@ -29,34 +70,40 @@ async function processChat(userId, message, threadId = null, attachments = []) {
     isNewThread = true;
   }
 
-  // Step 1, 2, & 3: Run Emotion, Memory, and Personality retrieval concurrently
-  const [emotion, memories, personality] = await Promise.all([
-    detectEmotion(message),
-    retrieveMemory({ userId, query: message, limit: 5 }),
-    getPersonality(userId),
-  ]);
+  const [emotion, memories, personality, profile, threadContext, personalityTrend] =
+    await Promise.all([
+      detectEmotion(message),
+      retrieveMemory({ userId, query: message, limit: 5 }),
+      getPersonality(userId),
+      getProfile(userId),
+      getRecentThreadMessages(activeThreadId, userId),
+      getPersonalityTrend(userId),
+    ]);
 
-  // Step 4 & 7-prep: Thought Engine and Memory Extraction run in parallel
   const [reasoning, extractedMemories] = await Promise.all([
     generateThought({
       userInput: message,
       memories,
       personality,
+      profile,
+      threadContext,
     }),
     extractMemories({ userInput: message, emotion }),
   ]);
 
-  // Step 5: Decision Engine — generate final response
-  const response = await generateDecision({
+  const response = await generateResponse({
     userInput: message,
+    name: profile?.name,
+    profile,
+    personality,
+    personalityTrend,
     emotion,
     memories,
-    personality,
     reasoning,
+    threadContext,
     attachments,
   });
 
-  // Step 6: Save Conversation
   await prisma.conversation.create({
     data: {
       userId,
@@ -68,7 +115,6 @@ async function processChat(userId, message, threadId = null, attachments = []) {
     },
   });
 
-  // Step 7: Save Memory — 1 SHORT_TERM (raw message) + N extracted facts
   await saveMemory({
     userId,
     content: message.trim(),
@@ -85,13 +131,10 @@ async function processChat(userId, message, threadId = null, attachments = []) {
     });
   }
 
-  // Step 8: Self-Evolution — update personality traits
   await evolvePersonality({ userId, emotion });
 
-  // Reload personality after evolution so snapshot reflects updated traits
   const updatedPersonality = await getPersonality(userId);
 
-  // Trigger thread title generation in the background if it's a new thread
   if (isNewThread) {
     generateThreadTitle(activeThreadId, userId).catch((err) => {
       logger.error({ message: "Error generating thread title in background", error: err.message });
@@ -152,13 +195,16 @@ async function simulateChat(userId, message, opts = {}) {
   const start = Date.now();
   logger.debug({ message: "Simulate chat start", userId });
 
-  const [emotion, memories, personality] = await Promise.all([
-    detectEmotion(message),
-    retrieveMemorySafe({ userId, query: message, limit: 5 }),
-    getPersonality(userId),
-  ]);
+  const [emotion, memories, personality, profile, threadContext, personalityTrend] =
+    await Promise.all([
+      detectEmotion(message),
+      retrieveMemorySafe({ userId, query: message, limit: 5 }),
+      getPersonality(userId),
+      getProfile(userId),
+      Promise.resolve([]),
+      getPersonalityTrend(userId),
+    ]);
 
-  // Apply personality override if provided (what-if mode)
   const effectivePersonality = opts.personalityOverride
     ? { ...personality, ...opts.personalityOverride }
     : personality;
@@ -168,18 +214,22 @@ async function simulateChat(userId, message, opts = {}) {
       userInput: message,
       memories,
       personality: effectivePersonality,
+      profile,
+      threadContext,
     }),
-    assistantChain.invoke({
-      userInput: message,
-    }),
+    assistantChain.invoke({ userInput: message }),
   ]);
 
-  const response = await generateDecision({
+  const response = await generateResponse({
     userInput: message,
+    name: profile?.name,
+    profile,
+    personality: effectivePersonality,
+    personalityTrend,
     emotion,
     memories,
-    personality: effectivePersonality,
     reasoning,
+    threadContext,
   });
 
   const duration = Date.now() - start;
@@ -208,4 +258,4 @@ async function retrieveMemorySafe(args) {
   }
 }
 
-module.exports = { processChat, getChatHistory, simulateChat };
+module.exports = { processChat, getChatHistory, simulateChat, getRecentThreadMessages, getProfile };
