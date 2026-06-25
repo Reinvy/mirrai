@@ -2,11 +2,51 @@
 
 const {
   chatChain,
-  streamChat,
+  streamChatRaw,
   invokeWithImages,
   streamWithImages,
 } = require("../llm/chains/chat-chain");
 const { buildSystemPrompt, buildChatInput } = require("../llm/prompts/chat-prompt");
+
+function extractReasoning(message) {
+  if (!message || typeof message !== "object") return null;
+  const kw = message.additional_kwargs || {};
+  if (typeof kw.reasoning_content === "string" && kw.reasoning_content) {
+    return kw.reasoning_content;
+  }
+  if (typeof kw.reasoning === "string" && kw.reasoning) {
+    return kw.reasoning;
+  }
+  if (Array.isArray(message.content)) {
+    const block = message.content.find((c) => c && c.type === "reasoning");
+    if (block && typeof block.reasoning === "string" && block.reasoning) {
+      return block.reasoning;
+    }
+  }
+  return null;
+}
+
+function extractReasoningDelta(chunk) {
+  if (!chunk || typeof chunk !== "object") return null;
+  const kw = chunk.additional_kwargs || {};
+  if (typeof kw.reasoning_content === "string" && kw.reasoning_content) {
+    return kw.reasoning_content;
+  }
+  if (typeof kw.reasoning === "string" && kw.reasoning) {
+    return kw.reasoning;
+  }
+  return null;
+}
+
+function pickTextFromMessage(message) {
+  if (typeof message?.content === "string") return message.content;
+  if (Array.isArray(message?.content)) {
+    return message.content
+      .map((c) => (typeof c === "string" ? c : c.text || ""))
+      .join("");
+  }
+  return "";
+}
 
 function buildResponseContext({
   name,
@@ -15,7 +55,6 @@ function buildResponseContext({
   personalityTrend,
   emotion,
   memories,
-  reasoning,
   threadContext,
 }) {
   return buildSystemPrompt({
@@ -25,7 +64,6 @@ function buildResponseContext({
     personalityTrend,
     emotion,
     memories,
-    reasoning,
     threadContext,
   });
 }
@@ -40,7 +78,6 @@ async function generateResponse(params, { llm } = {}) {
     personalityTrend,
     emotion,
     memories,
-    reasoning,
     threadContext,
   } = params;
 
@@ -52,13 +89,16 @@ async function generateResponse(params, { llm } = {}) {
       personalityTrend,
       emotion,
       memories,
-      reasoning,
       threadContext,
     });
-    return await invokeWithImages({ systemMessage, userText: userInput, attachments }, { llm });
+    const text = await invokeWithImages(
+      { systemMessage, userText: userInput, attachments },
+      { llm },
+    );
+    return { text, reasoning: null };
   }
 
-  return await chatChain.invoke(
+  const result = await chatChain.invokeRaw(
     buildChatInput({
       name,
       profile,
@@ -66,15 +106,19 @@ async function generateResponse(params, { llm } = {}) {
       personalityTrend,
       emotion,
       memories,
-      reasoning,
       threadContext,
       userInput,
     }),
     { llm },
   );
+
+  return {
+    text: pickTextFromMessage(result),
+    reasoning: extractReasoning(result),
+  };
 }
 
-function streamResponse(params, { llm } = {}) {
+async function* streamResponse(params, { llm } = {}) {
   const {
     userInput,
     attachments,
@@ -84,7 +128,6 @@ function streamResponse(params, { llm } = {}) {
     personalityTrend,
     emotion,
     memories,
-    reasoning,
     threadContext,
   } = params;
 
@@ -96,13 +139,19 @@ function streamResponse(params, { llm } = {}) {
       personalityTrend,
       emotion,
       memories,
-      reasoning,
       threadContext,
     });
-    return streamWithImages({ systemMessage, userText: userInput, attachments }, { llm });
+    for await (const text of streamWithImages(
+      { systemMessage, userText: userInput, attachments },
+      { llm },
+    )) {
+      yield { type: "delta", text };
+    }
+    return;
   }
 
-  return streamChat(
+  let buffer = "";
+  for await (const chunk of streamChatRaw(
     buildChatInput({
       name,
       profile,
@@ -110,16 +159,34 @@ function streamResponse(params, { llm } = {}) {
       personalityTrend,
       emotion,
       memories,
-      reasoning,
       threadContext,
       userInput,
     }),
     { llm },
-  );
+  )) {
+    const reasoningDelta = extractReasoningDelta(chunk);
+    if (reasoningDelta) {
+      buffer += reasoningDelta;
+      yield { type: "reasoning", text: reasoningDelta };
+    }
+    const text = pickTextFromMessage(chunk);
+    if (text) {
+      yield { type: "delta", text };
+    }
+  }
+  if (!buffer) {
+    yield { type: "reasoning", text: null, final: true };
+  }
+}
+
+function extractReasoningFromChunk(chunk) {
+  return extractReasoningDelta(chunk);
 }
 
 module.exports = {
   generateResponse,
   streamResponse,
   buildResponseContext,
+  extractReasoning,
+  extractReasoningFromChunk,
 };

@@ -9,11 +9,10 @@ const { prisma } = require("../app/config/db");
 jest.mock("../app/services/emotion", () => ({
   detectEmotion: jest.fn().mockResolvedValue({ emotion: "neutral", confidence: 0.8 }),
 }));
-jest.mock("../app/services/thought", () => ({
-  generateThought: jest.fn().mockResolvedValue("Memikirkan respons yang tepat..."),
-}));
 jest.mock("../app/services/response", () => ({
-  generateResponse: jest.fn().mockResolvedValue("Ini adalah respons test dari MirrAI."),
+  generateResponse: jest
+    .fn()
+    .mockResolvedValue({ text: "Ini adalah respons test dari MirrAI.", reasoning: null }),
 }));
 jest.mock("../app/services/evolution", () => ({
   evolvePersonality: jest.fn().mockResolvedValue({}),

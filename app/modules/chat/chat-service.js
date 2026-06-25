@@ -2,8 +2,7 @@
 
 const { prisma } = require("../../config/db");
 const { detectEmotion } = require("../../services/emotion");
-const { generateThought } = require("../../services/thought");
-const { generateResponse } = require("../../services/response");
+const { generateResponse, streamResponse } = require("../../services/response");
 const { evolvePersonality } = require("../../services/evolution");
 const { extractMemories } = require("../../services/memory-extraction");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
@@ -13,8 +12,19 @@ const { createThread, generateThreadTitle } = require("./thread-service");
 const { assistantChain } = require("../../llm/chains/assistant-chain");
 const { logger } = require("../../config/logger");
 const { getLlmForUser } = require("../../services/llm-resolver");
+const { AppError } = require("../../utils/app-error");
 
 const THREAD_CONTEXT_LIMIT = 5;
+const MAX_ATTACHMENTS = 4;
+
+function assertVisionEnabled(attachments, visionEnabled) {
+  if (attachments && attachments.length > 0 && !visionEnabled) {
+    throw new AppError(
+      400,
+      "Lampiran gambar tidak didukung. Aktifkan vision di BYOK settings untuk mengirim gambar.",
+    );
+  }
+}
 
 async function getProfile(userId) {
   return prisma.user.findUnique({
@@ -59,7 +69,12 @@ async function processChat(userId, message, threadId = null, attachments = []) {
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId, threadId });
 
-  const { llm, byok } = await getLlmForUser(userId);
+  const { llm, byok, thinkingEnabled, visionEnabled } = await getLlmForUser(userId);
+
+  if (attachments && attachments.length > MAX_ATTACHMENTS) {
+    throw new AppError(400, `Maksimal ${MAX_ATTACHMENTS} lampiran per pesan`);
+  }
+  assertVisionEnabled(attachments, visionEnabled);
 
   if (!byok) {
     const { checkAndIncrementQuota } = require("../../services/quota");
@@ -87,35 +102,29 @@ async function processChat(userId, message, threadId = null, attachments = []) {
       getPersonalityTrend(userId),
     ]);
 
-  const [reasoning, extractedMemories] = await Promise.all([
-    generateThought(
+  const [extractedMemories, responseResult] = await Promise.all([
+    extractMemories({ userInput: message, emotion }, { llm }).catch((err) => {
+      logger.warn({ message: "Memory extraction failed, continuing", error: err.message });
+      return [];
+    }),
+    generateResponse(
       {
         userInput: message,
-        memories,
-        personality,
+        name: profile?.name,
         profile,
+        personality,
+        personalityTrend,
+        emotion,
+        memories,
         threadContext,
+        attachments,
       },
       { llm },
     ),
-    extractMemories({ userInput: message, emotion }, { llm }),
   ]);
 
-  const response = await generateResponse(
-    {
-      userInput: message,
-      name: profile?.name,
-      profile,
-      personality,
-      personalityTrend,
-      emotion,
-      memories,
-      reasoning,
-      threadContext,
-      attachments,
-    },
-    { llm },
-  );
+  const response = responseResult.text;
+  const reasoning = responseResult.reasoning;
 
   await prisma.conversation.create({
     data: {
@@ -123,7 +132,7 @@ async function processChat(userId, message, threadId = null, attachments = []) {
       threadId: activeThreadId,
       message: message.trim(),
       response,
-      reasoning,
+      reasoning: reasoning || null,
       emotion,
     },
   });
@@ -159,8 +168,8 @@ async function processChat(userId, message, threadId = null, attachments = []) {
 
   return {
     response,
+    reasoning: reasoning || null,
     emotion,
-    reasoning,
     personality_snapshot: updatedPersonality,
     threadId: activeThreadId,
   };
@@ -208,7 +217,8 @@ async function simulateChat(userId, message, opts = {}) {
   const start = Date.now();
   logger.debug({ message: "Simulate chat start", userId });
 
-  const { llm } = await getLlmForUser(userId);
+  const { llm, visionEnabled } = await getLlmForUser(userId);
+  assertVisionEnabled([], visionEnabled);
 
   const [emotion, memories, personality, profile, threadContext, personalityTrend] =
     await Promise.all([
@@ -224,34 +234,22 @@ async function simulateChat(userId, message, opts = {}) {
     ? { ...personality, ...opts.personalityOverride }
     : personality;
 
-  const [reasoning, assistantResponse] = await Promise.all([
-    generateThought(
+  const [assistantResponse, { text: response, reasoning }] = await Promise.all([
+    assistantChain.invoke({ userInput: message }, { llm }),
+    generateResponse(
       {
         userInput: message,
-        memories,
-        personality: effectivePersonality,
+        name: profile?.name,
         profile,
+        personality: effectivePersonality,
+        personalityTrend,
+        emotion,
+        memories,
         threadContext,
       },
       { llm },
     ),
-    assistantChain.invoke({ userInput: message }, { llm }),
   ]);
-
-  const response = await generateResponse(
-    {
-      userInput: message,
-      name: profile?.name,
-      profile,
-      personality: effectivePersonality,
-      personalityTrend,
-      emotion,
-      memories,
-      reasoning,
-      threadContext,
-    },
-    { llm },
-  );
 
   const duration = Date.now() - start;
   logger.debug({ message: "Simulate chat done", userId, duration });
@@ -259,7 +257,7 @@ async function simulateChat(userId, message, opts = {}) {
   return {
     twin: {
       response,
-      reasoning,
+      reasoning: reasoning || null,
       emotion,
       personality_snapshot: effectivePersonality,
     },
@@ -279,4 +277,12 @@ async function retrieveMemorySafe(args) {
   }
 }
 
-module.exports = { processChat, getChatHistory, simulateChat, getRecentThreadMessages, getProfile };
+module.exports = {
+  processChat,
+  getChatHistory,
+  simulateChat,
+  getRecentThreadMessages,
+  getProfile,
+  MAX_ATTACHMENTS,
+  assertVisionEnabled,
+};

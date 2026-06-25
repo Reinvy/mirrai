@@ -2,7 +2,6 @@
 
 const { prisma } = require("../../config/db");
 const { detectEmotion } = require("../../services/emotion");
-const { generateThought } = require("../../services/thought");
 const { streamResponse } = require("../../services/response");
 const { evolvePersonality } = require("../../services/evolution");
 const { extractMemories } = require("../../services/memory-extraction");
@@ -12,6 +11,8 @@ const { formatPersonalityTrend } = require("../../llm/format");
 const { createThread, generateThreadTitle } = require("./thread-service");
 const { logger } = require("../../config/logger");
 const { getLlmForUser } = require("../../services/llm-resolver");
+const { AppError } = require("../../utils/app-error");
+const { assertVisionEnabled, MAX_ATTACHMENTS } = require("./chat-service");
 
 const THREAD_CONTEXT_LIMIT = 5;
 
@@ -58,7 +59,12 @@ async function* processChatStream(userId, message, threadId = null, attachments 
   const start = Date.now();
   logger.debug({ message: "Chat stream pipeline start", userId, threadId });
 
-  const { llm, byok } = await getLlmForUser(userId);
+  const { llm, byok, visionEnabled } = await getLlmForUser(userId);
+
+  if (attachments && attachments.length > MAX_ATTACHMENTS) {
+    throw new AppError(400, `Maksimal ${MAX_ATTACHMENTS} lampiran per pesan`);
+  }
+  assertVisionEnabled(attachments, visionEnabled);
 
   if (!byok) {
     const { checkAndIncrementQuota } = require("../../services/quota");
@@ -93,25 +99,17 @@ async function* processChatStream(userId, message, threadId = null, attachments 
 
   yield JSON.stringify({ event: "meta", threadId: activeThreadId, emotion });
 
-  const [reasoning, extractedMemories] = await Promise.all([
-    generateThought(
-      {
-        userInput: message,
-        memories,
-        personality,
-        profile,
-        threadContext,
-      },
-      { llm },
-    ),
-    extractMemories({ userInput: message, emotion }, { llm }),
+  const [extractedMemories] = await Promise.all([
+    extractMemories({ userInput: message, emotion }, { llm }).catch((err) => {
+      logger.warn({ message: "Memory extraction failed, continuing", error: err.message });
+      return [];
+    }),
   ]);
 
-  yield JSON.stringify({ event: "reasoning", reasoning });
-
   let fullResponse = "";
+  let fullReasoning = "";
   try {
-    for await (const delta of streamResponse(
+    for await (const event of streamResponse(
       {
         userInput: message,
         name: profile?.name,
@@ -120,14 +118,20 @@ async function* processChatStream(userId, message, threadId = null, attachments 
         personalityTrend,
         emotion,
         memories,
-        reasoning,
         threadContext,
         attachments,
       },
       { llm },
     )) {
-      fullResponse += delta;
-      yield JSON.stringify({ event: "delta", text: delta });
+      if (event.type === "reasoning") {
+        if (event.text) {
+          fullReasoning += event.text;
+          yield JSON.stringify({ event: "reasoning", reasoning: event.text });
+        }
+      } else if (event.type === "delta") {
+        fullResponse += event.text;
+        yield JSON.stringify({ event: "delta", text: event.text });
+      }
     }
   } catch (err) {
     logger.error({
@@ -146,7 +150,7 @@ async function* processChatStream(userId, message, threadId = null, attachments 
         threadId: activeThreadId,
         message: message.trim(),
         response: fullResponse,
-        reasoning,
+        reasoning: fullReasoning || null,
         emotion,
       },
     });
@@ -183,7 +187,7 @@ async function* processChatStream(userId, message, threadId = null, attachments 
     yield JSON.stringify({
       event: "done",
       response: fullResponse,
-      reasoning,
+      reasoning: fullReasoning || null,
       emotion,
       personality_snapshot: updatedPersonality,
       threadId: activeThreadId,

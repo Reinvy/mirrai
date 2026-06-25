@@ -59,6 +59,14 @@ class ByokValidation {
       }
     }
 
+    if (body.thinkingEnabled !== undefined && typeof body.thinkingEnabled !== "boolean") {
+      errors.push("thinkingEnabled harus boolean");
+    }
+
+    if (body.visionEnabled !== undefined && typeof body.visionEnabled !== "boolean") {
+      errors.push("visionEnabled harus boolean");
+    }
+
     if (errors.length > 0) {
       return next(new AppError(400, errors.join("; ")));
     }

@@ -28,6 +28,8 @@ model User {
     byokApiKey         String?
     byokBaseUrl        String?
     byokModel          String?
+    byokThinkingEnabled Boolean             @default(false)
+    byokVisionEnabled   Boolean             @default(false)
     createdAt          DateTime             @default(now())
     deletedAt          DateTime?
     conversations      Conversation[]

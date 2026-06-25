@@ -26,9 +26,19 @@ async function* streamChat(input, { llm } = {}) {
   }
 }
 
+async function* streamChatRaw(input, { llm } = {}) {
+  const target = llm || getLlm();
+  const stream = await buildModelOnlyChain(target).stream(input);
+  for await (const chunk of stream) {
+    yield chunk;
+  }
+}
+
 const chatChain = {
   invoke: async (input, { llm } = {}) => buildChain(llm || getLlm()).invoke(input),
   stream: streamChat,
+  streamRaw: streamChatRaw,
+  invokeRaw: async (input, { llm } = {}) => buildModelOnlyChain(llm || getLlm()).invoke(input),
 };
 
 async function invokeWithImages({ systemMessage, userText, attachments }, { llm } = {}) {
@@ -94,6 +104,7 @@ function getModelOnlyChain(llm) {
 module.exports = {
   chatChain,
   streamChat,
+  streamChatRaw,
   getModelOnlyChain,
   invokeWithImages,
   streamWithImages,

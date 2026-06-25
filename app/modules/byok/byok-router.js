@@ -25,15 +25,17 @@ router.use(tokenVerify);
  *     responses:
  *       200:
  *         description: BYOK status
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 enabled: { type: boolean }
- *                 baseUrl: { type: string, nullable: true }
- *                 model: { type: string, nullable: true }
- *                 apiKeyMasked: { type: string, nullable: true }
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             enabled: { type: boolean }
+ *             baseUrl: { type: string, nullable: true }
+ *             model: { type: string, nullable: true }
+ *             apiKeyMasked: { type: string, nullable: true }
+ *             thinkingEnabled: { type: boolean }
+ *             visionEnabled: { type: boolean }
  *       401: { description: Unauthorized }
  */
 router.get("/", getByokController);
@@ -51,21 +53,29 @@ router.get("/", getByokController);
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               enabled: { type: boolean, default: true }
- *               baseUrl:
- *                 type: string
- *                 example: https://api.openai.com/v1
- *               apiKey:
- *                 type: string
- *                 description: Di-encrypt saat disimpan. Tidak akan dikembalikan penuh.
- *               model:
- *                 type: string
- *                 example: gpt-4o-mini
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             enabled: { type: boolean, default: true }
+ *             baseUrl:
+ *               type: string
+ *               example: https://api.openai.com/v1
+ *             apiKey:
+ *               type: string
+ *               description: Di-encrypt saat disimpan. Tidak akan dikembalikan penuh.
+ *             model:
+ *               type: string
+ *               example: gpt-4o-mini
+ *             thinkingEnabled:
+ *               type: boolean
+ *               default: false
+ *               description: Aktifkan native model thinking (reasoning_content). Hanya untuk model yang mendukung (o1/o3, DeepSeek R1, dll).
+ *             visionEnabled:
+ *               type: boolean
+ *               default: false
+ *               description: Aktifkan dukungan lampiran gambar (vision). Hanya untuk model multimodal.
  *     responses:
  *       200:
  *         description: Updated

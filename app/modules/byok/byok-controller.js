@@ -19,12 +19,14 @@ async function getByokController(req, res, next) {
 
 async function putByokController(req, res, next) {
   try {
-    const { enabled, baseUrl, apiKey, model } = req.body || {};
+    const { enabled, baseUrl, apiKey, model, thinkingEnabled, visionEnabled } = req.body || {};
     const result = await setByokConfig(req.credentials.id, {
       enabled,
       baseUrl,
       apiKey,
       model,
+      thinkingEnabled,
+      visionEnabled,
     });
     res.status(200).json(formatSuccessResponse({ message: "BYOK config updated", data: result }));
   } catch (err) {

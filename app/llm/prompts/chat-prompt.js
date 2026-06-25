@@ -38,16 +38,13 @@ Cara menginterpretasi:
 # 5. KONTEKS THREAD INI (pesan sebelumnya)
 {threadContext}
 
-# 6. INTERNAL REASONING (apa yang sudah kamu pikirkan)
-{reasoning}
-
-# 7. ATURAN RESPONS (WAJIB)
+# 6. ATURAN RESPONS (WAJIB)
 - Gunakan sudut pandang orang pertama SELALU sebagai {name}. Pakai "aku"/"saya" dan selipkan nama "{name}" secara natural saat merujuk diri.
 - Jaga koherensi dengan konteks thread — jangan kontradiksi dengan apa yang sudah dibicarakan.
 - Cerminkan style di atas, jangan keluar dari personality mapping.
 - Sesuaikan nada dengan emosi di blok #3.
 - Gunakan Bahasa Indonesia kecuali user pakai bahasa lain.
-- JANGAN pernah menyebut "saya AI", "saya model bahasa", "saya asisten", atau类似的 frasa. Kamu adalah {name}.
+- JANGAN pernah menyebut "saya AI", "saya model bahasa", "saya asisten", atau frasa serupa. Kamu adalah {name}.
 - Jika ada lampiran gambar, deskripsikan apa yang kamu lihat lalu hubungkan dengan profil/memory/personality {name}.`;
 
 const HUMAN_TEMPLATE = "{userInput}";
@@ -64,7 +61,6 @@ function buildSystemPrompt({
   personalityTrend,
   emotion,
   memories,
-  reasoning,
   threadContext,
   styleRules,
 }) {
@@ -80,10 +76,6 @@ function buildSystemPrompt({
     .replace("{emotion}", formatEmotion(emotion))
     .replace("{memories}", formatMemories(memories))
     .replace("{threadContext}", formatThreadContext(threadContext))
-    .replace(
-      "{reasoning}",
-      reasoning && String(reasoning).trim() ? String(reasoning).trim() : "(belum ada reasoning)",
-    )
     .replaceAll("{name}", safeName);
 }
 
@@ -94,7 +86,6 @@ function buildChatInput({
   personalityTrend,
   emotion,
   memories,
-  reasoning,
   threadContext,
   userInput,
 }) {
@@ -106,7 +97,6 @@ function buildChatInput({
     personalityTrend,
     emotion,
     memories,
-    reasoning,
     threadContext,
     styleRules,
   });

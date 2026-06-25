@@ -7,6 +7,13 @@ const { getLlm, resolveLlmConfig } = require("../config/openai");
 const { AppError } = require("../utils/app-error");
 const { logger } = require("../config/logger");
 
+const DEFAULT_THINKING_EFFORT = "medium";
+
+function buildReasoningPayload(enabled) {
+  if (!enabled) return null;
+  return { effort: DEFAULT_THINKING_EFFORT };
+}
+
 async function getUserByokConfig(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -15,6 +22,8 @@ async function getUserByokConfig(userId) {
       byokApiKey: true,
       byokBaseUrl: true,
       byokModel: true,
+      byokThinkingEnabled: true,
+      byokVisionEnabled: true,
     },
   });
   if (!user) return null;
@@ -24,10 +33,20 @@ async function getUserByokConfig(userId) {
 async function getLlmForUser(userId) {
   const user = await getUserByokConfig(userId);
   if (!user || !user.byokEnabled) {
-    return { llm: getLlm(), byok: false };
+    return {
+      llm: getLlm(),
+      byok: false,
+      thinkingEnabled: false,
+      visionEnabled: false,
+    };
   }
   if (!user.byokApiKey || !user.byokBaseUrl || !user.byokModel) {
-    return { llm: getLlm(), byok: false };
+    return {
+      llm: getLlm(),
+      byok: false,
+      thinkingEnabled: false,
+      visionEnabled: false,
+    };
   }
   let apiKey;
   try {
@@ -38,12 +57,24 @@ async function getLlmForUser(userId) {
       userId,
       error: err.message,
     });
-    return { llm: getLlm(), byok: false };
+    return {
+      llm: getLlm(),
+      byok: false,
+      thinkingEnabled: false,
+      visionEnabled: false,
+    };
   }
+  const thinkingEnabled = Boolean(user.byokThinkingEnabled);
+  const visionEnabled = Boolean(user.byokVisionEnabled);
   const llm = new ChatOpenAI(
-    resolveLlmConfig({ apiKey, baseURL: user.byokBaseUrl, model: user.byokModel }),
+    resolveLlmConfig({
+      apiKey,
+      baseURL: user.byokBaseUrl,
+      model: user.byokModel,
+      reasoning: buildReasoningPayload(thinkingEnabled),
+    }),
   );
-  return { llm, byok: true };
+  return { llm, byok: true, thinkingEnabled, visionEnabled };
 }
 
 async function getByokStatus(userId) {
@@ -57,6 +88,8 @@ async function getByokStatus(userId) {
       baseUrl: null,
       model: null,
       apiKeyMasked: null,
+      thinkingEnabled: false,
+      visionEnabled: false,
     };
   }
   return {
@@ -64,10 +97,12 @@ async function getByokStatus(userId) {
     baseUrl: user.byokBaseUrl,
     model: user.byokModel,
     apiKeyMasked: maskApiKey(decrypt(user.byokApiKey)),
+    thinkingEnabled: Boolean(user.byokThinkingEnabled),
+    visionEnabled: Boolean(user.byokVisionEnabled),
   };
 }
 
-async function setByokConfig(userId, { enabled, baseUrl, apiKey, model }) {
+async function setByokConfig(userId, { enabled, baseUrl, apiKey, model, thinkingEnabled, visionEnabled }) {
   const update = {};
   if (typeof enabled === "boolean") {
     update.byokEnabled = enabled;
@@ -77,10 +112,23 @@ async function setByokConfig(userId, { enabled, baseUrl, apiKey, model }) {
   if (apiKey !== undefined) {
     update.byokApiKey = apiKey ? encrypt(apiKey) : null;
   }
+  if (typeof thinkingEnabled === "boolean") {
+    update.byokThinkingEnabled = thinkingEnabled;
+  }
+  if (typeof visionEnabled === "boolean") {
+    update.byokVisionEnabled = visionEnabled;
+  }
   return prisma.user.update({
     where: { id: userId },
     data: update,
-    select: { id: true, byokEnabled: true, byokBaseUrl: true, byokModel: true },
+    select: {
+      id: true,
+      byokEnabled: true,
+      byokBaseUrl: true,
+      byokModel: true,
+      byokThinkingEnabled: true,
+      byokVisionEnabled: true,
+    },
   });
 }
 
@@ -92,16 +140,26 @@ async function disableByok(userId) {
       byokApiKey: null,
       byokBaseUrl: null,
       byokModel: null,
+      byokThinkingEnabled: false,
+      byokVisionEnabled: false,
     },
     select: { id: true },
   });
 }
 
-async function testByokConnection({ baseUrl, apiKey, model }) {
+async function testByokConnection({ baseUrl, apiKey, model, thinkingEnabled, visionEnabled }) {
   if (!apiKey || !baseUrl || !model) {
     throw new AppError(400, "baseUrl, apiKey, dan model wajib diisi");
   }
-  const llm = new ChatOpenAI(resolveLlmConfig({ apiKey, baseURL: baseUrl, model, temperature: 0 }));
+  const llm = new ChatOpenAI(
+    resolveLlmConfig({
+      apiKey,
+      baseURL: baseUrl,
+      model,
+      temperature: 0,
+      reasoning: buildReasoningPayload(Boolean(thinkingEnabled)),
+    }),
+  );
   const start = Date.now();
   try {
     const result = await llm.invoke("ping");

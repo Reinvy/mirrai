@@ -37,7 +37,10 @@ class ChatValidation {
         );
       }
       for (const att of attachments) {
-        if (!att || att.type !== "image") {
+        if (!att || typeof att !== "object") {
+          throw new AppError(400, "Lampiran tidak valid");
+        }
+        if (att.type !== "image") {
           throw new AppError(400, "Tipe lampiran tidak didukung");
         }
         if (typeof att.dataUrl !== "string" || !att.dataUrl.startsWith("data:")) {
@@ -49,6 +52,17 @@ class ChatValidation {
             400,
             `Tipe gambar tidak didukung. Boleh: ${[...ALLOWED_IMAGE_MIME].join(", ")}`,
           );
+        }
+        if (att.mimeType !== undefined) {
+          if (typeof att.mimeType !== "string" || !ALLOWED_IMAGE_MIME.has(att.mimeType)) {
+            throw new AppError(
+              400,
+              `mimeType lampiran tidak valid. Boleh: ${[...ALLOWED_IMAGE_MIME].join(", ")}`,
+            );
+          }
+          if (att.mimeType !== mimeMatch[1]) {
+            throw new AppError(400, "mimeType lampiran tidak cocok dengan dataUrl");
+          }
         }
         // Approximate size: base64 length * 3/4
         const base64Length = att.dataUrl.length - mimeMatch[0].length;

@@ -4,15 +4,13 @@ require("./setup");
 
 const request = require("supertest");
 
-// Mock the AI chain calls to avoid OpenRouter/OpenAI dependency in tests
 jest.mock("../app/services/emotion", () => ({
   detectEmotion: jest.fn().mockResolvedValue({ emotion: "neutral", confidence: 0.8 }),
 }));
-jest.mock("../app/services/thought", () => ({
-  generateThought: jest.fn().mockResolvedValue("Memikirkan respons simulasi..."),
-}));
 jest.mock("../app/services/response", () => ({
-  generateResponse: jest.fn().mockResolvedValue("Ini adalah respons simulasi replika."),
+  generateResponse: jest
+    .fn()
+    .mockResolvedValue({ text: "Ini adalah respons simulasi replika.", reasoning: null }),
 }));
 jest.mock("../app/services/evolution", () => ({
   evolvePersonality: jest.fn().mockResolvedValue({}),
@@ -48,7 +46,7 @@ describe("Playground Simulation API", () => {
       expect(res.body.data).toHaveProperty("twin");
       expect(res.body.data).toHaveProperty("assistant");
       expect(res.body.data.twin).toHaveProperty("response", "Ini adalah respons simulasi replika.");
-      expect(res.body.data.twin).toHaveProperty("reasoning", "Memikirkan respons simulasi...");
+      expect(res.body.data.twin).toHaveProperty("reasoning", null);
       expect(res.body.data.twin.emotion).toHaveProperty("emotion", "neutral");
       expect(res.body.data.assistant).toHaveProperty(
         "response",

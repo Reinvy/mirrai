@@ -6,7 +6,7 @@ function resolveLlmConfig(overrides = {}) {
   const apiKey = overrides.apiKey ?? process.env.OPENAI_API_KEY ?? process.env.OPENROUTER_API_KEY;
   const baseURL =
     overrides.baseURL ?? process.env.OPENAI_API_BASE_URL ?? process.env.OPENAI_BASE_URL;
-  const model = overrides.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const model = overrides.model ?? process.env.OPENAI_MODEL ?? "deepseek-v4-flash";
   const temperature =
     overrides.temperature ??
     (process.env.OPENAI_TEMPERATURE ? parseFloat(process.env.OPENAI_TEMPERATURE) : 0.7);
@@ -22,6 +22,14 @@ function resolveLlmConfig(overrides = {}) {
   if (baseURL) {
     config.configuration = { baseURL };
   }
+
+  if (overrides.reasoning) {
+    config.reasoning = overrides.reasoning;
+  }
+  if (overrides.reasoningEffort) {
+    config.reasoningEffort = overrides.reasoningEffort;
+  }
+
   return config;
 }
 

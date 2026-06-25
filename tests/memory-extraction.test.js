@@ -8,13 +8,10 @@ const request = require("supertest");
 jest.mock("../app/services/emotion", () => ({
   detectEmotion: jest.fn().mockResolvedValue({ emotion: "neutral", confidence: 0.8 }),
 }));
-jest.mock("../app/services/thought", () => ({
-  generateThought: jest.fn().mockResolvedValue("Memikirkan respons..."),
-}));
 jest.mock("../app/services/response", () => {
   const defaultText = "Respons test.";
   async function* defaultGen() {
-    for (const w of defaultText.split(" ")) yield w + " ";
+    for (const w of defaultText.split(" ")) yield { type: "delta", text: w + " " };
   }
   const state = { impl: defaultGen };
   function streamResponse() {
@@ -27,7 +24,7 @@ jest.mock("../app/services/response", () => {
     state.impl = defaultGen;
   };
   return {
-    generateResponse: jest.fn().mockResolvedValue(defaultText),
+    generateResponse: jest.fn().mockResolvedValue({ text: defaultText, reasoning: null }),
     streamResponse,
   };
 });
