@@ -7,7 +7,7 @@
 - **Runtime:** Node.js 20+
 - **Framework:** Express 4.16 (CommonJS)
 - **ORM:** Prisma 7 (driver-adapter pattern, output ke `app/generated/prisma`)
-- **AI:** LangChain 1 + `@langchain/openai` (kompatibel dengan OpenAI / OpenRouter / self-hosted)
+- **AI:** LangChain 1 + `@langchain/openai` (OpenAI-compatible: OpenAI, self-hosted gateway, BYOK)
 - **Embedding:** `@huggingface/transformers` (`nomic-ai/nomic-embed-text-v1.5`, 768-dim, **lokal**)
 - **Vector Store:** `pgvector` (table `langchain_pg_embeddings`)
 - **DB:** PostgreSQL 14+ dengan ekstensi `pgvector`
@@ -50,16 +50,14 @@ TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mirrai_test \
 | `DATABASE_URL` | ✅ | — | Postgres connection string |
 | `JWT_SECRET` | ✅ | — | Min 32 char, random |
 | `JWT_EXPIRATION` |   | `8h` | Token lifetime |
-| `OPENAI_API_KEY` | ✅* | — | API key LLM provider |
-| `OPENROUTER_API_KEY` | ✅* | — | Alternatif, dibaca sebagai fallback `OPENAI_API_KEY` |
-| `OPENAI_MODEL` |   | `gpt-4o-mini` | Model name |
-| `OPENAI_API_BASE_URL` |   | — | Override base URL (untuk OpenRouter, self-host, dll) |
+| `OPENAI_API_KEY` | ✅ | — | API key LLM provider |
+| `OPENAI_MODEL` |   | `deepseek-v4-flash` | Model name |
+| `OPENAI_API_BASE_URL` |   | — | Override base URL (untuk self-hosted gateway, dll) |
 | `OPENAI_TEMPERATURE` |   | `0.7` | LLM temperature |
+| `BYOK_ENCRYPTION_KEY` |   | — | 32-byte base64 key untuk encrypt BYOK API keys. Wajib di production, optional di dev. |
 | `PORT` |   | `3000` | HTTP port |
 | `NODE_ENV` |   | `development` | `production` hides error stack & enables HSTS |
 | `ALLOWED_ORIGINS` |   | `http://localhost:3000` | CORS allowlist (comma-separated) |
-
-\* salah satu dari `OPENAI_API_KEY` atau `OPENROUTER_API_KEY` harus ada.
 
 ## Arsitektur
 
@@ -100,15 +98,16 @@ System prompt digital twin dibangun dari 7 blok konsisten (lihat `app/llm/prompt
 mirrai/
 ├── app/
 │   ├── modules/
-│   │   ├── auth/         # register, login, logout, /me
-│   │   ├── memory/       # CRUD + semantic search
-│   │   ├── personality/  # traits, history
-│   │   └── chat/         # chat pipeline + threads
-│   ├── services/         # emotion, thought, decision, evolution, token cleanup
-│   ├── llm/              # chains + prompts
+│   │   ├── auth/         # register, login, logout, /me, quota, profile
+│   │   ├── memory/       # CRUD + semantic search + graph + insights
+│   │   ├── personality/  # traits, history, insights
+│   │   ├── chat/         # pipeline + threads + stream + insights + recap + playground + public
+│   │   └── byok/         # user-supplied LLM keys (encrypted)
+│   ├── services/         # emotion, evolution, insights, llm-resolver, memory-extraction, memory-tuning, quota, recap, response, token-cleanup
+│   ├── llm/              # chains (chat, emotion, memory-extraction, assistant) + prompts + format + style-rules
 │   ├── middlewares/      # token-verify, error-handler
 │   ├── config/           # db, embedding, openai, logger, openapi
-│   ├── utils/            # app-error, response-formatter
+│   ├── utils/            # app-error, crypto (BYOK), response-formatter
 │   └── generated/prisma/ # gitignored
 ├── prisma/
 │   ├── schema.prisma
