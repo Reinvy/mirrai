@@ -1,15 +1,36 @@
-﻿"use strict";
+"use strict";
 
 const { prisma } = require("../../config/db");
 const { getEmbeddings } = require("../../config/embedding");
 
-async function saveMemory({ userId, content, type, importanceScore = 0.5 }) {
-  // Create memory record
+const CATEGORY_COLORS = {
+  CORE_BELIEF: "#ec4899",
+  EXPERIENCE: "#6366f1",
+  RELATIONSHIP: "#f59e0b",
+  GOAL_FEAR: "#ef4444",
+  DAILY_HABIT: "#10b981",
+  PHILOSOPHY: "#8b5cf6",
+};
+
+async function saveMemory({
+  userId,
+  content,
+  type = "SHORT_TERM",
+  category = "EXPERIENCE",
+  importanceScore = 0.5,
+  emotionalValence = 0.0,
+}) {
   const memory = await prisma.memory.create({
-    data: { userId, content, type, importanceScore },
+    data: {
+      userId,
+      content,
+      type,
+      category,
+      importanceScore,
+      emotionalValence,
+    },
   });
 
-  // Generate and save embedding asynchronously (fire-and-forget in prod, awaited here for data integrity)
   try {
     const [vector] = await getEmbeddings().embedDocuments([content]);
     const vectorStr = `[${vector.join(",")}]`;
@@ -19,14 +40,13 @@ async function saveMemory({ userId, content, type, importanceScore = 0.5 }) {
       WHERE id = ${memory.id}
     `;
   } catch {
-    // Embedding failure is non-fatal â€” memory is saved without vector
+    // Non-fatal
   }
 
   return memory;
 }
 
 async function retrieveMemory({ userId, query, limit = 5 }) {
-  // If no query, return recent memories by importance
   if (!query) {
     return prisma.memory.findMany({
       where: { userId, deletedAt: null },
@@ -36,10 +56,11 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
         id: true,
         content: true,
         type: true,
+        category: true,
         importanceScore: true,
         createdAt: true,
       },
-    });
+    }).catch(() => []);
   }
 
   try {
@@ -47,7 +68,7 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
     const vectorStr = `[${queryVector.join(",")}]`;
 
     const memories = await prisma.$queryRaw`
-      SELECT id, content, type, "importanceScore", "createdAt"
+      SELECT id, content, type, category, "importanceScore", "createdAt"
       FROM "Memory"
       WHERE "userId" = ${userId}
         AND "deletedAt" IS NULL
@@ -57,7 +78,6 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
     `;
     return memories;
   } catch {
-    // Fallback to recency-based retrieval if vector search fails
     return prisma.memory.findMany({
       where: { userId, deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -66,25 +86,90 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
         id: true,
         content: true,
         type: true,
+        category: true,
         importanceScore: true,
         createdAt: true,
       },
-    });
+    }).catch(() => []);
   }
 }
 
-async function getMemoriesByUser(userId) {
+async function getMemoriesByUser(userId, category = null) {
+  const where = { userId, deletedAt: null };
+  if (category) where.category = category;
+
   return prisma.memory.findMany({
-    where: { userId, deletedAt: null },
+    where,
     orderBy: [{ importanceScore: "desc" }, { createdAt: "desc" }],
     select: {
       id: true,
       content: true,
       type: true,
+      category: true,
       importanceScore: true,
       createdAt: true,
     },
+  }).catch(() => []);
+}
+
+async function getMemoryGraph(userId) {
+  const memories = await getMemoriesByUser(userId);
+
+  // Transform into Force-Directed Graph nodes and synaptic links
+  const nodes = memories.map((m, index) => ({
+    id: m.id,
+    label: m.content.slice(0, 32) + (m.content.length > 32 ? "..." : ""),
+    fullContent: m.content,
+    category: m.category || "EXPERIENCE",
+    type: m.type,
+    importance: m.importanceScore || 0.5,
+    val: Math.max(8, Math.round((m.importanceScore || 0.5) * 24)),
+    color: CATEGORY_COLORS[m.category] || "#6366f1",
+  }));
+
+  // Create intelligent associative links between nodes that share category or high importance
+  const links = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const sameCat = nodes[i].category === nodes[j].category;
+      const highImp = nodes[i].importance > 0.7 && nodes[j].importance > 0.7;
+      if (sameCat || (highImp && j === i + 1)) {
+        links.push({
+          source: nodes[i].id,
+          target: nodes[j].id,
+          value: sameCat ? 2 : 1,
+          color: sameCat ? nodes[i].color : "rgba(255,255,255,0.15)",
+        });
+      }
+    }
+  }
+
+  return {
+    nodes,
+    links,
+    stats: {
+      totalNodes: nodes.length,
+      totalSynapses: links.length,
+      categories: Object.keys(CATEGORY_COLORS).map((c) => ({
+        category: c,
+        count: nodes.filter((n) => n.category === c).length,
+        color: CATEGORY_COLORS[c],
+      })),
+    },
+  };
+}
+
+async function deleteMemory(userId, memoryId) {
+  return prisma.memory.updateMany({
+    where: { id: memoryId, userId },
+    data: { deletedAt: new Date() },
   });
 }
 
-module.exports = { saveMemory, retrieveMemory, getMemoriesByUser };
+module.exports = {
+  saveMemory,
+  retrieveMemory,
+  getMemoriesByUser,
+  getMemoryGraph,
+  deleteMemory,
+};

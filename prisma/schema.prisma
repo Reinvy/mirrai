@@ -14,16 +14,27 @@ enum MemoryType {
     EMOTIONAL
 }
 
+enum MemoryCategory {
+    CORE_BELIEF
+    EXPERIENCE
+    RELATIONSHIP
+    GOAL_FEAR
+    DAILY_HABIT
+    PHILOSOPHY
+}
+
 model User {
-    id            String         @id @default(cuid())
-    name          String         @unique
+    id            String              @id @default(cuid())
+    name          String              @unique
     password      String
-    tokenVersion  Int            @default(0)
-    createdAt     DateTime       @default(now())
+    tokenVersion  Int                 @default(0)
+    createdAt     DateTime            @default(now())
     deletedAt     DateTime?
     conversations Conversation[]
     memories      Memory[]
     personality   Personality?
+    simulations   SimulationSession[]
+    resonances    DailyResonance[]
 }
 
 model Conversation {
@@ -38,15 +49,21 @@ model Conversation {
 }
 
 model Memory {
-    id              String                      @id @default(cuid())
-    userId          String
-    content         String
-    embedding       Unsupported("vector(768)")?
-    importanceScore Float                       @default(0.5)
-    type            MemoryType
-    createdAt       DateTime                    @default(now())
-    deletedAt       DateTime?
-    user            User                        @relation(fields: [userId], references: [id])
+    id               String                      @id @default(cuid())
+    userId           String
+    content          String
+    category         MemoryCategory              @default(EXPERIENCE)
+    type             MemoryType
+    importanceScore  Float                       @default(0.5)
+    emotionalValence Float                       @default(0.0)
+    associations     String[]                    @default([])
+    embedding        Unsupported("vector(768)")?
+    createdAt        DateTime                    @default(now())
+    deletedAt        DateTime?
+    user             User                        @relation(fields: [userId], references: [id])
+
+    @@index([userId, importanceScore])
+    @@index([userId, category])
 }
 
 model Personality {
@@ -56,8 +73,34 @@ model Personality {
     humor       Float    @default(0.5)
     confidence  Float    @default(0.5)
     playfulness Float    @default(0.5)
+    archetype   String?  @default("The Dynamic Reflector")
     updatedAt   DateTime @updatedAt
     user        User     @relation(fields: [userId], references: [id])
+}
+
+model SimulationSession {
+    id        String   @id @default(cuid())
+    userId    String
+    title     String
+    scenario  String
+    branches  Json
+    consensus Json?
+    createdAt DateTime @default(now())
+    user      User     @relation(fields: [userId], references: [id])
+}
+
+model DailyResonance {
+    id         String   @id @default(cuid())
+    userId     String
+    date       DateTime @default(now())
+    theme      String
+    reflection String
+    prompt     String
+    moodAura   String   @default("#6366f1")
+    read       Boolean  @default(false)
+    user       User     @relation(fields: [userId], references: [id])
+
+    @@index([userId, date])
 }
 
 model TokenBlacklist {

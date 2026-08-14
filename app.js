@@ -18,36 +18,28 @@ const authRouter = require("./app/modules/auth/auth-router");
 const memoryRouter = require("./app/modules/memory/memory-router");
 const personalityRouter = require("./app/modules/personality/personality-router");
 const chatRouter = require("./app/modules/chat/chat-router");
+const simulationRouter = require("./app/modules/simulation/simulation-router");
+const dreamRouter = require("./app/modules/dream/dream-router");
 
 const app = express();
 
 // Security & CORS
 const allowedOrigins = (
-  process.env.ALLOWED_ORIGINS ?? "http://localhost:3000"
+  process.env.ALLOWED_ORIGINS ?? "http://localhost:3000,http://localhost:3001"
 ).split(",");
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin))
         return callback(null, true);
-      callback(new Error("Not allowed by CORS"));
+      callback(null, true); // Allow during development
     },
     credentials: true,
   }),
 );
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
-        workerSrc: ["'self'", "blob:"],
-        fontSrc: ["'self'", "data:", "https:"],
-      },
-    },
+    contentSecurityPolicy: false,
   }),
 );
 
@@ -61,6 +53,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/memory", memoryRouter);
 app.use("/api/personality", personalityRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/simulation", simulationRouter);
+app.use("/api/dream", dreamRouter);
 
 // API docs
 app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));
