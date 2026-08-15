@@ -9,7 +9,7 @@ const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function branchSimulationController(req, res, next) {
   try {
-    const userId = req.user.id;
+    const userId = req.credentials?.id || req.user?.id;
     const { scenario, title } = req.body;
     const result = await simulateScenario({ userId, scenario, title });
     res.status(200).json(
@@ -25,7 +25,7 @@ async function branchSimulationController(req, res, next) {
 
 async function councilDebateController(req, res, next) {
   try {
-    const userId = req.user.id;
+    const userId = req.credentials?.id || req.user?.id;
     const { dilemma } = req.body;
     const result = await conductCouncilDebate({ userId, dilemma });
     res.status(200).json(
@@ -41,7 +41,7 @@ async function councilDebateController(req, res, next) {
 
 async function getUserSimulationsController(req, res, next) {
   try {
-    const userId = req.user.id;
+    const userId = req.credentials?.id || req.user?.id;
     const data = await getUserSimulations(userId);
     res.status(200).json(
       formatSuccessResponse({

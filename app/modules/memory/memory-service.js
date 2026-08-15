@@ -172,7 +172,7 @@ async function updateMemory(memoryId, userId, { content, type, category, importa
   if (importanceScore !== undefined) data.importanceScore = importanceScore;
   if (content !== undefined) data.content = content.trim();
 
-  const updated = await prisma.memory.updateMany({
+  await prisma.memory.updateMany({
     where: { id: memoryId, userId },
     data,
   });
@@ -190,6 +190,10 @@ async function updateMemory(memoryId, userId, { content, type, category, importa
       // Abaikan kegagalan embedding non-fatal
     }
   }
+
+  const updated = await prisma.memory.findFirst({
+    where: { id: memoryId, userId },
+  });
 
   return updated;
 }

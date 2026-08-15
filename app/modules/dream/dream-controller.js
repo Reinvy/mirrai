@@ -9,7 +9,7 @@ const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 async function consolidateController(req, res, next) {
   try {
-    const userId = req.user.id;
+    const userId = req.credentials?.id || req.user?.id;
     const result = await consolidateMemories({ userId });
     res.status(200).json(
       formatSuccessResponse({
@@ -24,7 +24,7 @@ async function consolidateController(req, res, next) {
 
 async function dailyResonanceController(req, res, next) {
   try {
-    const userId = req.user.id;
+    const userId = req.credentials?.id || req.user?.id;
     const result = await getDailyResonance(userId);
     res.status(200).json(
       formatSuccessResponse({
@@ -39,7 +39,7 @@ async function dailyResonanceController(req, res, next) {
 
 async function dreamJournalController(req, res, next) {
   try {
-    const userId = req.user.id;
+    const userId = req.credentials?.id || req.user?.id;
     const result = await getDreamJournal(userId);
     res.status(200).json(
       formatSuccessResponse({

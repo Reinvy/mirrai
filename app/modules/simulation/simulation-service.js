@@ -1,10 +1,12 @@
 "use strict";
 
 const { prisma } = require("../../config/db");
-const { getLlm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openai");
+const { getLlmForUser } = require("../../services/llm-resolver");
 const { getPersonality } = require("../personality/personality-service");
 const { retrieveMemory } = require("../memory/memory-service");
 const { logger } = require("../../config/logger");
+
 
 /**
  * Procedural simulation fallback when LLM is unavailable
@@ -67,7 +69,8 @@ async function simulateScenario({ userId, scenario, title }) {
 
   let branches = [];
   try {
-    const llm = getLlm();
+    const userLlm = await getLlmForUser(userId).catch(() => ({ llm: getLlm() }));
+    const llm = userLlm.llm || getLlm();
     const prompt = `User menghadapi dilema / skenario hidup: "${scenario}".
 Personality traits: Empathy ${(personality.empathy * 100).toFixed(0)}%, Logic ${(personality.logic * 100).toFixed(0)}%, Confidence ${(personality.confidence * 100).toFixed(0)}%.
 Memory relevan: ${memories.map((m) => m.content).join("; ") || "Belum ada"}.
@@ -130,7 +133,8 @@ async function conductCouncilDebate({ userId, dilemma }) {
 
   let debate = [];
   try {
-    const llm = getLlm();
+    const userLlm = await getLlmForUser(userId).catch(() => ({ llm: getLlm() }));
+    const llm = userLlm.llm || getLlm();
     const prompt = `Dilema user: "${dilemma}".
 Buat simulasi debat meja bundar antara 4 persona internal user:
 1. "Rational Strategist" (Logika, efisiensi, probabilitas)

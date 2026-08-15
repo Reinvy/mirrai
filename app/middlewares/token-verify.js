@@ -48,6 +48,7 @@ async function tokenVerify(req, res, next) {
       name: decoded.name,
       tokenVersion: decoded.tokenVersion,
     };
+    req.user = req.credentials;
     next();
   } catch (err) {
     next(err);

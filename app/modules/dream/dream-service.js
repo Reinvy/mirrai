@@ -1,7 +1,8 @@
 "use strict";
 
 const { prisma } = require("../../config/db");
-const { getLlm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openai");
+const { getLlmForUser } = require("../../services/llm-resolver");
 const { getPersonality } = require("../personality/personality-service");
 const { logger } = require("../../config/logger");
 
@@ -27,7 +28,9 @@ async function consolidateMemories({ userId }) {
   let distilledInsights = [];
 
   try {
-    const llm = getLlm();
+    const userLlm = await getLlmForUser(userId).catch(() => ({ llm: getLlm() }));
+    const llm = userLlm.llm || getLlm();
+
     const prompt = `Berikut adalah beberapa interaksi/memori jangka pendek terbaru dari user:
 ${memoryTexts}
 

@@ -1,13 +1,13 @@
 "use strict";
 
 const { prisma } = require("../../config/db");
-const { getLlm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openai");
 const { detectEmotion } = require("../../services/emotion");
-const { generateThought } = require("../../services/thought");
 const { evolvePersonality } = require("../../services/evolution");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
 const { logger } = require("../../config/logger");
+
 
 const PERSONA_PROMPTS = {
   twin: {
@@ -82,7 +82,7 @@ async function streamChatHandler(req, res) {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders?.();
 
-  const userId = req.user.id;
+  const userId = req.credentials?.id || req.user?.id;
   const { message, personaMode = "twin" } = req.body || req.query;
 
   if (!message || !message.trim()) {
@@ -123,11 +123,7 @@ async function streamChatHandler(req, res) {
 
     // Stage 3: Thought simulation
     res.write(`event: stage\ndata: ${JSON.stringify({ stage: "REASONING", detail: "Mensimulasikan pola pikir internal..." })}\n\n`);
-    const thought = await generateThought({
-      userInput: cleanMessage,
-      memories,
-      personality,
-    }).catch(() => "Menghubungkan konteks percakapan dengan memori yang relevan...");
+    const thought = `Menganalisis emosi ${emotion.emotion} dan mengaitkan dengan memori serta kepribadian digital.`;
 
     res.write(`event: thought\ndata: ${JSON.stringify({ thought })}\n\n`);
 
