@@ -1,8 +1,8 @@
-﻿"use strict";
+"use strict";
 
 const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { RunnableLambda } = require("@langchain/core/runnables");
-const { getLlm } = require("../../config/openrouter");
+const { getLlm } = require("../../config/openai");
 const { emotionPrompt } = require("../prompts/emotion-prompt");
 
 // Extracts first JSON object from a string, handling markdown code fence wrappers
@@ -12,18 +12,12 @@ const extractJson = RunnableLambda.from((text) => {
   return JSON.parse(match[0]);
 });
 
-let _chain = null;
+function buildChain(llm) {
+  return emotionPrompt.pipe(llm).pipe(new StringOutputParser()).pipe(extractJson);
+}
 
 const emotionChain = {
-  invoke: async (input) => {
-    if (!_chain) {
-      _chain = emotionPrompt
-        .pipe(getLlm())
-        .pipe(new StringOutputParser())
-        .pipe(extractJson);
-    }
-    return _chain.invoke(input);
-  },
+  invoke: async (input, { llm } = {}) => buildChain(llm || getLlm()).invoke(input),
 };
 
 module.exports = { emotionChain };

@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "byokEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN "byokApiKey" TEXT;
+ALTER TABLE "User" ADD COLUMN "byokBaseUrl" TEXT;
+ALTER TABLE "User" ADD COLUMN "byokModel" TEXT;

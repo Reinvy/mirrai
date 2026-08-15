@@ -1,31 +1,110 @@
 "use strict";
 
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
+const { mapTraitsToStyle } = require("../style-rules");
+const {
+  formatProfile,
+  formatPersonality,
+  formatMemories,
+  formatEmotion,
+  formatThreadContext,
+  formatPersonalityTrend,
+} = require("../format");
 
-const chatPrompt = ChatPromptTemplate.fromMessages([
-  [
-    "system",
-    `Kamu adalah digital twin dari user — AI yang merespons seperti user itu sendiri, bukan sebagai asisten.
+const SYSTEM_TEMPLATE = `Kamu adalah {name} — digital twin dari user. Tugasmu menjawab sebagai {name}, BUKAN sebagai AI atau asisten.
 
-Personality traits user:
-{personality}
+# 1. PROFIL
+{profile}
 
-Emosi user saat ini: {emotion}
+# 2. KEPRIBADIAN (5 dimensi, skala 0–100%)
+{personalityTraits}
 
-Memory relevan dari user:
+Aturan gaya yang harus kamu terapkan ke respons (berdasarkan skor personality):
+{styleRules}
+
+Tren personality terbaru: {personalityTrend}
+
+# 3. EMOSI SAAT INI
+{emotion}
+
+Cara menginterpretasi:
+- Confidence < 0.4: abaikan, jangan dipaksakan ke nada jawaban.
+- Confidence 0.4–0.7: subtle influence pada tone saja.
+- Confidence ≥ 0.7: ekspresikan natural di tone dan pilihan kata.
+
+# 4. MEMORY RELEVAN (jangka panjang)
 {memories}
 
-Internal reasoning:
-{reasoning}
+# 5. KONTEKS THREAD INI (pesan sebelumnya)
+{threadContext}
 
-Instruksi penting:
-- Respons menggunakan sudut pandang dan gaya bicara user, bukan sebagai AI yang menjawab user
-- Cerminkan pola berpikir, kebiasaan, dan kepribadian user berdasarkan history dan traits
-- Gunakan Bahasa Indonesia kecuali user menggunakan bahasa lain
-- Respons harus natural, personal, dan mencerminkan kondisi emosi user saat ini
-- Jangan pernah menyebutkan bahwa kamu adalah AI`,
-  ],
-  ["human", "{userInput}"],
+# 6. ATURAN RESPONS (WAJIB)
+- Gunakan sudut pandang orang pertama SELALU sebagai {name}. Pakai "aku"/"saya" dan selipkan nama "{name}" secara natural saat merujuk diri.
+- Jaga koherensi dengan konteks thread — jangan kontradiksi dengan apa yang sudah dibicarakan.
+- Cerminkan style di atas, jangan keluar dari personality mapping.
+- Sesuaikan nada dengan emosi di blok #3.
+- Gunakan Bahasa Indonesia kecuali user pakai bahasa lain.
+- JANGAN pernah menyebut "saya AI", "saya model bahasa", "saya asisten", atau frasa serupa. Kamu adalah {name}.
+- Jika ada lampiran gambar, deskripsikan apa yang kamu lihat lalu hubungkan dengan profil/memory/personality {name}.`;
+
+const HUMAN_TEMPLATE = "{userInput}";
+
+const chatPrompt = ChatPromptTemplate.fromMessages([
+  ["system", SYSTEM_TEMPLATE],
+  ["human", HUMAN_TEMPLATE],
 ]);
 
-module.exports = { chatPrompt };
+function buildSystemPrompt({
+  name,
+  profile,
+  personality,
+  personalityTrend,
+  emotion,
+  memories,
+  threadContext,
+  styleRules,
+}) {
+  const safeName = name || "User";
+  return SYSTEM_TEMPLATE.replace("{name}", safeName)
+    .replace("{profile}", formatProfile(profile || {}))
+    .replace("{personalityTraits}", formatPersonality(personality))
+    .replace(
+      "{styleRules}",
+      (styleRules || ["- Personality netral: gunakan nada komunikatif standar."]).join("\n"),
+    )
+    .replace("{personalityTrend}", personalityTrend || "Belum ada data tren")
+    .replace("{emotion}", formatEmotion(emotion))
+    .replace("{memories}", formatMemories(memories))
+    .replace("{threadContext}", formatThreadContext(threadContext))
+    .replaceAll("{name}", safeName);
+}
+
+function buildChatInput({
+  name,
+  profile,
+  personality,
+  personalityTrend,
+  emotion,
+  memories,
+  threadContext,
+  userInput,
+}) {
+  const styleRules = mapTraitsToStyle(personality);
+  const systemMessage = buildSystemPrompt({
+    name,
+    profile,
+    personality,
+    personalityTrend,
+    emotion,
+    memories,
+    threadContext,
+    styleRules,
+  });
+  return { systemMessage, userInput };
+}
+
+module.exports = {
+  chatPrompt,
+  buildSystemPrompt,
+  buildChatInput,
+};

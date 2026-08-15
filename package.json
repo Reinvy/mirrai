@@ -4,13 +4,18 @@
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
-    "test": "jest --runInBand"
+    "dev": "nodemon ./bin/www",
+    "test": "jest --runInBand",
+    "seed": "node scripts/seed.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@langchain/community": "^1.1.25",
     "@langchain/core": "^1.1.34",
-    "@langchain/openrouter": "^0.1.7",
+    "@langchain/openai": "^1.5.1",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@scalar/express-api-reference": "^0.9.4",
@@ -32,6 +37,7 @@
   },
   "devDependencies": {
     "jest": "^30.3.0",
+    "prettier": "^3.8.4",
     "prisma": "^7.5.0",
     "supertest": "^7.2.2"
   }

@@ -24,28 +24,56 @@ enum MemoryCategory {
 }
 
 model User {
-    id            String              @id @default(cuid())
-    name          String              @unique
-    password      String
-    tokenVersion  Int                 @default(0)
-    createdAt     DateTime            @default(now())
+    id                  String               @id @default(cuid())
+    name                String               @unique
+    password            String
+    tokenVersion        Int                  @default(0)
+    bio                 String?
+    isPublicProfile     Boolean              @default(false)
+    tier                String               @default("free")
+    dailyChatCount      Int                  @default(0)
+    dailyCountDate      DateTime?
+    byokEnabled         Boolean              @default(false)
+    byokApiKey          String?
+    byokBaseUrl         String?
+    byokModel           String?
+    byokThinkingEnabled Boolean              @default(false)
+    byokVisionEnabled   Boolean              @default(false)
+    createdAt           DateTime             @default(now())
+    deletedAt           DateTime?
+    conversations       Conversation[]
+    memories            Memory[]
+    personality         Personality?
+    threads             Thread[]
+    personalityHistory  PersonalityHistory[]
+    simulations         SimulationSession[]
+    resonances          DailyResonance[]
+}
+
+model Thread {
+    id            String         @id @default(cuid())
+    title         String         @default("Percakapan Baru")
+    userId        String
+    isPublic      Boolean        @default(false)
+    shareSlug     String?        @unique
+    createdAt     DateTime       @default(now())
     deletedAt     DateTime?
+    user          User           @relation(fields: [userId], references: [id])
     conversations Conversation[]
-    memories      Memory[]
-    personality   Personality?
-    simulations   SimulationSession[]
-    resonances    DailyResonance[]
 }
 
 model Conversation {
     id        String    @id @default(cuid())
     userId    String
+    threadId  String?
     message   String
     response  String
+    reasoning String?
     emotion   Json
     createdAt DateTime  @default(now())
     deletedAt DateTime?
     user      User      @relation(fields: [userId], references: [id])
+    thread    Thread?   @relation(fields: [threadId], references: [id])
 }
 
 model Memory {
@@ -58,6 +86,7 @@ model Memory {
     emotionalValence Float                       @default(0.0)
     associations     String[]                    @default([])
     embedding        Unsupported("vector(768)")?
+    lastUsedAt       DateTime?
     createdAt        DateTime                    @default(now())
     deletedAt        DateTime?
     user             User                        @relation(fields: [userId], references: [id])
@@ -67,15 +96,29 @@ model Memory {
 }
 
 model Personality {
-    userId      String   @id
-    empathy     Float    @default(0.5)
-    logic       Float    @default(0.5)
-    humor       Float    @default(0.5)
-    confidence  Float    @default(0.5)
-    playfulness Float    @default(0.5)
-    archetype   String?  @default("The Dynamic Reflector")
-    updatedAt   DateTime @updatedAt
-    user        User     @relation(fields: [userId], references: [id])
+    userId      String    @id
+    empathy     Float     @default(0.5)
+    logic       Float     @default(0.5)
+    humor       Float     @default(0.5)
+    confidence  Float     @default(0.5)
+    playfulness Float     @default(0.5)
+    archetype   String?   @default("The Dynamic Reflector")
+    updatedAt   DateTime  @updatedAt
+    deletedAt   DateTime?
+    user        User      @relation(fields: [userId], references: [id])
+}
+
+model PersonalityHistory {
+    id          String    @id @default(cuid())
+    userId      String
+    empathy     Float
+    logic       Float
+    humor       Float
+    confidence  Float
+    playfulness Float
+    createdAt   DateTime  @default(now())
+    deletedAt   DateTime?
+    user        User      @relation(fields: [userId], references: [id])
 }
 
 model SimulationSession {

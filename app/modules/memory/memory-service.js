@@ -2,6 +2,7 @@
 
 const { prisma } = require("../../config/db");
 const { getEmbeddings } = require("../../config/embedding");
+const { bumpMemoryUsage } = require("../../services/memory-tuning");
 
 const CATEGORY_COLORS = {
   CORE_BELIEF: "#ec4899",
@@ -40,7 +41,7 @@ async function saveMemory({
       WHERE id = ${memory.id}
     `;
   } catch {
-    // Non-fatal
+    // Embedding failure is non-fatal — memory is saved without vector
   }
 
   return memory;
@@ -48,7 +49,7 @@ async function saveMemory({
 
 async function retrieveMemory({ userId, query, limit = 5 }) {
   if (!query) {
-    return prisma.memory.findMany({
+    const memories = await prisma.memory.findMany({
       where: { userId, deletedAt: null },
       orderBy: [{ importanceScore: "desc" }, { createdAt: "desc" }],
       take: limit,
@@ -61,13 +62,16 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
         createdAt: true,
       },
     }).catch(() => []);
+    bumpMemoryUsage(memories.map((m) => m.id)).catch(() => {});
+    return memories;
   }
 
+  let memories;
   try {
     const [queryVector] = await getEmbeddings().embedDocuments([query]);
     const vectorStr = `[${queryVector.join(",")}]`;
 
-    const memories = await prisma.$queryRaw`
+    memories = await prisma.$queryRaw`
       SELECT id, content, type, category, "importanceScore", "createdAt"
       FROM "Memory"
       WHERE "userId" = ${userId}
@@ -76,9 +80,9 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
       ORDER BY embedding <=> ${vectorStr}::vector
       LIMIT ${limit}
     `;
-    return memories;
   } catch {
-    return prisma.memory.findMany({
+    // Fallback to recency-based retrieval if vector search fails
+    memories = await prisma.memory.findMany({
       where: { userId, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -92,6 +96,8 @@ async function retrieveMemory({ userId, query, limit = 5 }) {
       },
     }).catch(() => []);
   }
+  bumpMemoryUsage(memories.map((m) => m.id)).catch(() => {});
+  return memories;
 }
 
 async function getMemoriesByUser(userId, category = null) {
@@ -116,7 +122,7 @@ async function getMemoryGraph(userId) {
   const memories = await getMemoriesByUser(userId);
 
   // Transform into Force-Directed Graph nodes and synaptic links
-  const nodes = memories.map((m, index) => ({
+  const nodes = memories.map((m) => ({
     id: m.id,
     label: m.content.slice(0, 32) + (m.content.length > 32 ? "..." : ""),
     fullContent: m.content,
@@ -159,9 +165,43 @@ async function getMemoryGraph(userId) {
   };
 }
 
-async function deleteMemory(userId, memoryId) {
-  return prisma.memory.updateMany({
+async function updateMemory(memoryId, userId, { content, type, category, importanceScore }) {
+  const data = {};
+  if (type !== undefined) data.type = type;
+  if (category !== undefined) data.category = category;
+  if (importanceScore !== undefined) data.importanceScore = importanceScore;
+  if (content !== undefined) data.content = content.trim();
+
+  const updated = await prisma.memory.updateMany({
     where: { id: memoryId, userId },
+    data,
+  });
+
+  if (content !== undefined) {
+    try {
+      const [vector] = await getEmbeddings().embedDocuments([content.trim()]);
+      const vectorStr = `[${vector.join(",")}]`;
+      await prisma.$executeRaw`
+        UPDATE "Memory"
+        SET embedding = ${vectorStr}::vector
+        WHERE id = ${memoryId} AND "userId" = ${userId}
+      `;
+    } catch {
+      // Abaikan kegagalan embedding non-fatal
+    }
+  }
+
+  return updated;
+}
+
+async function deleteMemory(arg1, arg2) {
+  return prisma.memory.updateMany({
+    where: {
+      OR: [
+        { id: arg1, userId: arg2 },
+        { id: arg2, userId: arg1 },
+      ],
+    },
     data: { deletedAt: new Date() },
   });
 }
@@ -171,5 +211,6 @@ module.exports = {
   retrieveMemory,
   getMemoriesByUser,
   getMemoryGraph,
+  updateMemory,
   deleteMemory,
 };

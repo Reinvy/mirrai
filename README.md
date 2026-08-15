@@ -1,372 +1,224 @@
-# 🧠🪞 MirrAI
+# 🧠🪞 MirrAI Backend
 
-> **An evolving AI that reflects your thoughts, learns from your behavior, and grows with you over time.**
+> Express API untuk **digital-twin AI** yang berevolusi dari interaksi user. Bagian backend dari monorepo [MirrAI](../).
 
----
+## Stack
 
-## ✨ Overview
+- **Runtime:** Node.js 20+
+- **Framework:** Express 4.16 (CommonJS)
+- **ORM:** Prisma 7 (driver-adapter pattern, output ke `app/generated/prisma`)
+- **AI:** LangChain 1 + `@langchain/openai` (OpenAI-compatible: OpenAI, self-hosted gateway, BYOK)
+- **Embedding:** `@huggingface/transformers` (`nomic-ai/nomic-embed-text-v1.5`, 768-dim, **lokal**)
+- **Vector Store:** `pgvector` (table `langchain_pg_embeddings`)
+- **DB:** PostgreSQL 14+ dengan ekstensi `pgvector`
+- **Logging:** Winston + daily rotate file
+- **API docs:** Scalar UI di `/docs`, OpenAPI spec di `/api-docs.json`
 
-**MirrAI** is an experimental AI system designed to act as a **digital reflection of its user** — not just answering questions, but understanding patterns, adapting personality, and evolving continuously.
+## Quick Start
 
-Unlike traditional assistants, MirrAI is built to:
-
-- remember what matters
-- adapt how it responds
-- and gradually become a **mirror of your thinking and behavior**
-
-> It doesn’t just respond… it reflects.
-
----
-
-## 🧬 Core Philosophy
-
-Most AI systems are static.
-MirrAI is not.
-
-It is built on three principles:
-
-- 🧠 **Memory** — Every interaction matters
-- 🧬 **Evolution** — Personality is not fixed
-- 🪞 **Reflection** — Responses should feel like _you_
-
-Over time, MirrAI develops a unique identity shaped by its user.
-
----
-
-## ⚙️ Key Features
-
-### 🧠 Memory Engine
-
-- Short-term memory (recent conversations)
-- Long-term memory (vector embeddings)
-- Semantic memory (facts about the user)
-- Emotional memory (important emotional moments)
-
----
-
-### 🧬 Personality Evolution
-
-- Dynamic personality traits:
-  - empathy
-  - logic
-  - humor
-  - confidence
-  - playfulness
-
-- Traits evolve based on:
-  - interaction patterns
-  - emotional signals
-  - feedback loops
-
----
-
-### ❤️ Emotion Awareness
-
-- Detects user emotion from text input
-- Adjusts tone and response accordingly
-- Stores emotional context for future interactions
-
----
-
-### 💭 Thought Simulation
-
-- Breaks down input into reasoning steps
-- Mimics user decision-making patterns
-- Learns from past responses and behavior
-
----
-
-### 🧠 Digital Twin Mode
-
-- Generates responses as if it were _you_
-- Uses:
-  - memory
-  - personality
-  - past decisions
-
----
-
-### 🔄 Self-Evolution System
-
-- Updates personality after each interaction
-- Re-evaluates memory importance
-- Continuously improves contextual understanding
-
----
-
-## 🔁 System Flow
-
-```
-User Input
-   ↓
-Emotion Analysis
-   ↓
-Memory Retrieval
-   ↓
-Personality Load
-   ↓
-Thought Simulation
-   ↓
-Response Generation
-   ↓
-Memory Update
-   ↓
-Personality Evolution
+```bash
+cp .env.example .env
+# edit .env — wajib: DATABASE_URL, JWT_SECRET (min 32 char), OPENAI_API_KEY
+npm install
+npx prisma generate                # output ke app/generated/prisma (gitignored)
+npx prisma migrate deploy
+npx prisma db seed                 # opsional, data demo (1 user, memories, personality)
+npm start                          # port dari PORT, default 3000
 ```
 
----
+Buka `http://localhost:3000/docs` untuk Scalar API reference.
 
-## 🏗️ Architecture
+## Menjalankan Test
 
-```
-Client (Web / Mobile)
-   ↓
-Express API
-   ↓
-LangChain Orchestrator
-   ↓
-Core Modules:
-  - Memory Engine
-  - Personality Engine
-  - Emotion Engine
-  - Thought Engine
-  - Decision Engine
-   ↓
-LLM Provider (OpenAI / Gemini / Local)
-   ↓
-Database + Vector Store
+```bash
+npm test                           # jest --runInBand, butuh Postgres
+npx jest tests/auth.test.js --runInBand
 ```
 
----
+Test adalah **integration test** — boot Express app via supertest, hit DB real. Butuh `mirrai_test` database:
 
-## 🧩 Project Structure (Planned)
+```bash
+createdb mirrai_test
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mirrai_test \
+  npx prisma migrate deploy
+```
+
+## Environment Variables
+
+| Var | Wajib | Default | Keterangan |
+| --- | :---: | --- | --- |
+| `DATABASE_URL` | ✅ | — | Postgres connection string |
+| `JWT_SECRET` | ✅ | — | Min 32 char, random |
+| `JWT_EXPIRATION` |   | `8h` | Token lifetime |
+| `OPENAI_API_KEY` | ✅ | — | API key LLM provider |
+| `OPENAI_MODEL` |   | `deepseek-v4-flash` | Model name |
+| `OPENAI_API_BASE_URL` |   | — | Override base URL (untuk self-hosted gateway, dll) |
+| `OPENAI_TEMPERATURE` |   | `0.7` | LLM temperature |
+| `BYOK_ENCRYPTION_KEY` |   | — | 32-byte base64 key untuk encrypt BYOK API keys. Wajib di production, optional di dev. |
+| `PORT` |   | `3000` | HTTP port |
+| `NODE_ENV` |   | `development` | `production` hides error stack & enables HSTS |
+| `ALLOWED_ORIGINS` |   | `http://localhost:3000` | CORS allowlist (comma-separated) |
+
+## Arsitektur
+
+```
+Client → Express → Module Router → Controller → Service → Prisma / LLM Chain
+                                                ↓
+                                  Emotion / Memory / Personality / Thought / Decision
+```
+
+### 8-Step Chat Pipeline
+
+`POST /api/chat` menjalankan pipeline 8 langkah (lihat `app/modules/chat/chat-service.js`):
+
+1. Create thread baru (jika belum ada `threadId`) + cek quota
+2. **Concurrent:** detect emotion, retrieve long-term memory, get personality, get recent thread context (5 pesan terakhir), get personality trend
+3. **Concurrent:** generate internal thought (sudut pandang user) + extract memory baru
+4. Generate response (sebagai digital twin, dengan profil + thread context)
+5. Save conversation
+6. Save memory (1 SHORT_TERM raw + N extracted LONG_TERM/SEMANTIC/EMOTIONAL)
+7. Evolve personality (emotion delta + memory-pattern drift, max ±0.01/turn)
+8. Generate thread title (background, LLM)
+
+### Digital Twin Identity
+
+System prompt digital twin dibangun dari 7 blok konsisten (lihat `app/llm/prompts/chat-prompt.js`):
+
+1. **Profil** — nama & bio user
+2. **Personality** — 5 traits + style rules hasil pemetaan otomatis
+3. **Emosi** — label + confidence + cara interpretasi
+4. **Memory relevan** — hasil semantic search
+5. **Konteks thread** — 5 pesan terakhir percakapan di thread ini
+6. **Internal reasoning** — apa yang user pikirkan sebelum menjawab
+7. **Aturan respons** — bahasa, sudut pandang, larangan menyebut AI
+
+## Struktur Project
 
 ```
 mirrai/
 ├── app/
 │   ├── modules/
-│   │   ├── chat/
-│   │   ├── memory/
-│   │   ├── personality/
-│   │   ├── emotion/
-│   │   └── decision/
-│   ├── services/
-│   ├── utils/
-│   ├── middlewares/
-│   └── llm/
-│       ├── providers/
-│       └── prompts/
-├── config/
-├── scripts/
-├── tests/
-└── server.js
+│   │   ├── auth/         # register, login, logout, /me, quota, profile
+│   │   ├── memory/       # CRUD + semantic search + graph + insights
+│   │   ├── personality/  # traits, history, insights
+│   │   ├── chat/         # pipeline + threads + stream + insights + recap + playground + public
+│   │   └── byok/         # user-supplied LLM keys (encrypted)
+│   ├── services/         # emotion, evolution, insights, llm-resolver, memory-extraction, memory-tuning, quota, recap, response, token-cleanup
+│   ├── llm/              # chains (chat, emotion, memory-extraction, assistant) + prompts + format + style-rules
+│   ├── middlewares/      # token-verify, error-handler
+│   ├── config/           # db, embedding, openai, logger, openapi
+│   ├── utils/            # app-error, crypto (BYOK), response-formatter
+│   └── generated/prisma/ # gitignored
+├── prisma/
+│   ├── schema.prisma
+│   ├── migrations/
+│   └── seed.js           # demo data
+├── tests/                # integration tests
+└── bin/www               # HTTP server bootstrap
 ```
 
----
+## API Endpoints
 
-## 🚀 Getting Started
+Lihat Scalar UI di `http://localhost:3000/docs` untuk dokumentasi lengkap dengan schema dan contoh.
 
-### 1. Clone Repository
+### Auth
 
-```bash
-git clone https://github.com/Reinvy/mirrai.git
-cd mirrai
-```
-
----
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
----
-
-### 3. Setup Environment Variables
-
-Buat file `.env`:
-
-```env
-PORT=3000
-
-# LLM
-OPENAI_API_KEY=your_key_here
-
-# Database
-DATABASE_URL=your_database_url
-
-# Vector DB
-VECTOR_DB_URL=your_vector_db
-```
-
----
-
-### 4. Run Server
-
-```bash
-npm run dev
-```
-
----
-
-## 📡 API Example
-
-### POST `/api/chat`
-
-#### Request
-
-```json
-{
-  "userId": "123",
-  "message": "I feel really tired today"
-}
-```
-
-#### Response
-
-```json
-{
-  "response": "You’ve been pushing yourself a lot lately… maybe it’s okay to slow down a bit.",
-  "emotion": {
-    "type": "sad",
-    "confidence": 0.82
-  },
-  "personality_snapshot": {
-    "empathy": 0.78,
-    "logic": 0.65
-  }
-}
-```
-
----
-
-## 🧠 Prompt Design (Dynamic)
-
-MirrAI builds prompts dynamically using:
-
-- personality state
-- user emotion
-- relevant memories
-
-Example:
-
-```txt
-You are a digital twin of the user.
-
-Personality:
-- empathy: 0.78
-- logic: 0.65
-
-User Emotion:
-- sad
-
-Relevant Memories:
-- user often works late
-- user prefers calm reasoning
-
-Respond as the user would think.
-```
-
----
-
-## 🗄️ Data Model (Simplified)
-
-### Conversations
-
-- user_id
-- message
-- response
-- emotion
-- created_at
-
----
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
+| POST | `/api/auth/register` |   | 20/15min | min pw 8 char |
+| POST | `/api/auth/login` |   | 20/15min | |
+| POST | `/api/auth/logout` | ✅ | 20/15min | blacklist token |
+| GET  | `/api/auth/me` | ✅ | 120/min | |
+| PUT  | `/api/auth/me/profile` | ✅ | 30/min | update bio + public flag |
+| GET  | `/api/auth/me/quota` | ✅ | 60/min | daily chat quota status |
+| POST | `/api/auth/me/upgrade` | ✅ | 5/day | upgrade to Pro tier (dev: no payment) |
+| PUT  | `/api/auth/password` | ✅ | 20/15min | invalidate all tokens user |
+| DELETE | `/api/auth/me` | ✅ | 20/15min | soft-delete cascade |
+| GET  | `/api/auth/me/export` | ✅ | 120/min | download JSON dump |
 
 ### Memory
 
-- content
-- embedding
-- type
-- importance_score
-
----
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
+| GET  | `/api/memory/me` | ✅ | 120/min | list my memories |
+| GET  | `/api/memory/insights` | ✅ | 120/min | stats by type, top important |
+| GET  | `/api/memory/graph` | ✅ | 30/min | nodes + edges from embedding similarity |
+| POST | `/api/memory` | ✅ | 30/min | |
+| PUT  | `/api/memory/:id` | ✅ | 30/min | |
+| DELETE | `/api/memory/:id` | ✅ | 30/min | |
+| POST | `/api/memory/tune` | ✅ | 30/min | manual trigger auto-tune |
 
 ### Personality
 
-- empathy
-- logic
-- humor
-- confidence
-- playfulness
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
+| GET  | `/api/personality/me` | ✅ | 120/min | |
+| PUT  | `/api/personality/me` | ✅ | 30/min | |
+| POST | `/api/personality/me/reset` | ✅ | 30/min | reset to 0.5 |
+| GET  | `/api/personality/me/history` | ✅ | 120/min | ?from=&to= date filter |
+| GET  | `/api/personality/me/insights` | ✅ | 120/min | trend 7 hari + LLM summary |
 
----
+### Chat
 
-## 📈 Roadmap
+| Method | Path | Auth | Rate Limit | Catatan |
+| ------ | ---- | :--: | :--------: | ------- |
+| GET  | `/api/chat` | ✅ | 120/min | paginated history |
+| POST | `/api/chat` | ✅ | 10/min | 8-step pipeline |
+| POST | `/api/chat/stream` | ✅ | 10/min | **SSE streaming** |
+| POST | `/api/chat/playground` | ✅ | 10/min | ephemeral twin vs assistant |
+| GET  | `/api/chat/insights` | ✅ | 120/min | daily activity, top emotions |
+| GET  | `/api/chat/mood-timeline` | ✅ | 120/min | ?days=7\|30\|90 emotion timeline |
+| GET  | `/api/chat/recap` | ✅ | 120/min | ?days=7\|30\|90 LLM summary |
+| GET  | `/api/chat/:id` | ✅ | 120/min | single conversation |
+| POST | `/api/chat/threads` | ✅ | 60/min | create thread |
+| GET  | `/api/chat/threads` | ✅ | 60/min | list my threads |
+| PUT  | `/api/chat/threads/:id` | ✅ | 60/min | rename |
+| DELETE | `/api/chat/threads/:id` | ✅ | 60/min | delete + cascade |
+| POST | `/api/chat/threads/:id/share` | ✅ | 60/min | publish thread (generate slug) |
+| DELETE | `/api/chat/threads/:id/share` | ✅ | 60/min | unpublish |
 
-### Phase 1 (MVP)
+### Public (no auth)
 
-- Chat system
-- Basic memory
-- Emotion detection
-- Static personality
+| Method | Path | Auth | Catatan |
+| ------ | ---- | :--: | ------- |
+| GET  | `/api/chat/shared/:slug` |   | read shared thread |
+| GET  | `/api/chat/users/:username` |   | public profile (if enabled) |
+| GET  | `/api/chat/users/:username/threads` |   | public threads list |
+| GET  | `/api/chat/compare?u1=&u2=` |   | compare 2 public profiles |
 
----
+### Docs
 
-### Phase 2
+| Method | Path | Auth | Catatan |
+| ------ | ---- | :--: | ------- |
+| GET  | `/api-docs.json` |   | OpenAPI spec |
+| GET  | `/docs` |   | Scalar UI |
 
-- Personality evolution
-- Improved memory ranking
-- Reflection mode
+> `/me` adalah alias untuk endpoint yang ignore path `:userId` dan pakai user dari JWT.
 
----
+### SSE Streaming format
 
-### Phase 3
+`POST /api/chat/stream` mengembalikan Server-Sent Events. Setiap event dipisahkan `\n\n`:
 
-- Proactive AI (initiates conversation)
-- Voice interaction
-- Multi-device sync
+```
+data: {"event":"meta","threadId":"...","emotion":{"emotion":"happy","confidence":0.8}}\n\n
+data: {"event":"reasoning","reasoning":"..."}\n\n
+data: {"event":"delta","text":"Halo"}\n\n
+data: {"event":"delta","text":", "}\n\n
+data: {"event":"delta","text":"user!"}\n\n
+data: {"event":"done","response":"Halo, user!","reasoning":"...","emotion":{...},"personality_snapshot":{...},"threadId":"..."}\n\n
+```
 
----
+Client dapat menutup stream dengan `AbortController`. Conversation baru hanya disimpan setelah event `done`.
 
-## ⚠️ Limitations
+## Deployment
 
-- Personality evolution is probabilistic
-- Emotion detection may not always be accurate
-- LLM responses may contain hallucinations
+Backend bisa di-deploy ke mana saja yang support Node 20+ dan Postgres. Quick options:
 
----
+- **Fly.io / Railway / Render** — paling cepat
+- **VPS** (DigitalOcean, Hetzner) — kontrol penuh, perlu setup sendiri
 
-## 🔒 Privacy & Ethics
+Set environment variables di platform, jalankan `prisma migrate deploy` saat boot, dan expose port.
 
-MirrAI handles deeply personal data.
-Recommended practices:
+## Lisensi
 
-- encrypt user data
-- allow memory deletion
-- transparent data usage
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome.
-
-You can help by:
-
-- improving memory retrieval
-- optimizing personality evolution
-- enhancing prompt strategies
-
----
-
-## 💛 Final Note
-
-MirrAI is not just an AI assistant.
-
-It is an attempt to build something that:
-
-- understands
-- remembers
-- and slowly becomes… a reflection of you
-
-> Not just intelligence — but identity.
+[MIT](../LICENSE) — © 2026 Reinvy

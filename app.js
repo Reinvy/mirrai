@@ -7,11 +7,14 @@ const path = require("path");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 
 const { swaggerSpec } = require("./app/config/openapi");
 const { apiReference } = require("@scalar/express-api-reference");
 const { errorHandler } = require("./app/middlewares/error-handler");
 const { AppError } = require("./app/utils/app-error");
+const { startTokenCleanupJob } = require("./app/services/token-cleanup-service");
+const { startMemoryTuningJob } = require("./app/services/memory-tuning");
 
 // Module routers
 const authRouter = require("./app/modules/auth/auth-router");
@@ -20,8 +23,40 @@ const personalityRouter = require("./app/modules/personality/personality-router"
 const chatRouter = require("./app/modules/chat/chat-router");
 const simulationRouter = require("./app/modules/simulation/simulation-router");
 const dreamRouter = require("./app/modules/dream/dream-router");
+const byokRouter = require("./app/modules/byok/byok-router");
 
 const app = express();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "error",
+    message: "Terlalu banyak percobaan. Coba lagi dalam 15 menit.",
+  },
+});
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "error",
+    message: "Terlalu banyak request. Coba lagi sebentar lagi.",
+  },
+});
+const readLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "error",
+    message: "Terlalu banyak request. Coba lagi sebentar lagi.",
+  },
+});
 
 // Security & CORS
 const allowedOrigins = (
@@ -39,22 +74,32 @@ app.use(
 );
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    // CSP is intentionally omitted: this is a JSON API server, not an HTML
+    // document. CSP on JSON responses is a no-op for security but surfaces as
+    // a `script-src 'unsafe-eval'` warning in the frontend's DevTools "Issues"
+    // panel because Chrome aggregates CSP across same-origin responses. The
+    // frontend (Next.js) is responsible for setting its own CSP if needed.
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    hsts:
+      process.env.NODE_ENV === "production"
+        ? { maxAge: 31536000, includeSubDomains: true }
+        : false,
   }),
 );
 
 // Logging & parsing
 app.use(morgan("dev"));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: false, limit: "25mb" }));
 
 // API routes
-app.use("/api/auth", authRouter);
-app.use("/api/memory", memoryRouter);
-app.use("/api/personality", personalityRouter);
-app.use("/api/chat", chatRouter);
-app.use("/api/simulation", simulationRouter);
-app.use("/api/dream", dreamRouter);
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/memory", readLimiter, memoryRouter);
+app.use("/api/personality", readLimiter, personalityRouter);
+app.use("/api/chat", chatRouter); // chat-router applies its own per-route limiter
+app.use("/api/simulation", writeLimiter, simulationRouter);
+app.use("/api/dream", writeLimiter, dreamRouter);
+app.use("/api/byok", writeLimiter, byokRouter); // tokenVerify applied inside router
 
 // API docs
 app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));
@@ -73,5 +118,11 @@ app.use((req, res, next) => {
 
 // Global error handler (must be last)
 app.use(errorHandler);
+
+// Start periodic token blacklist cleanup
+startTokenCleanupJob();
+
+// Start periodic memory importance tuning
+startMemoryTuningJob();
 
 module.exports = app;

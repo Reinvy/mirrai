@@ -3,9 +3,9 @@
 const { emotionChain } = require("../llm/chains/emotion-chain");
 const { logger } = require("../config/logger");
 
-async function detectEmotion(userInput) {
+async function detectEmotion(userInput, { llm } = {}) {
   try {
-    const result = await emotionChain.invoke({ userInput });
+    const result = await emotionChain.invoke({ userInput }, { llm });
     const conf = Number(result?.confidence);
     if (result?.emotion && typeof result.emotion === "string" && !isNaN(conf)) {
       return { emotion: result.emotion, confidence: conf };
