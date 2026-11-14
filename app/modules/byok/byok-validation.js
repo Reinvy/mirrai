@@ -79,8 +79,10 @@ class ByokValidation {
     if (!baseUrl || typeof baseUrl !== "string" || !isValidHttpUrl(baseUrl)) {
       errors.push("baseUrl harus URL http(s) yang valid");
     }
-    if (!apiKey || typeof apiKey !== "string" || apiKey.length < MIN_API_KEY_LEN) {
-      errors.push(`apiKey minimal ${MIN_API_KEY_LEN} karakter`);
+    if (apiKey !== undefined && apiKey !== null && apiKey !== "") {
+      if (typeof apiKey !== "string" || apiKey.length < MIN_API_KEY_LEN) {
+        errors.push(`apiKey minimal ${MIN_API_KEY_LEN} karakter`);
+      }
     }
     if (!model || typeof model !== "string" || model.length === 0) {
       errors.push("model wajib diisi");

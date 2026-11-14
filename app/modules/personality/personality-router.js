@@ -9,17 +9,11 @@ const {
   getPersonalityHistoryController,
   getPersonalityInsightsController,
   resetPersonalityController,
+  completeOnboardingController,
 } = require("./personality-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
 
 const router = express.Router();
-
-router.get(
-  "/archetype/:userId",
-  tokenVerify,
-  PersonalityValidation.validateGetByUser,
-  getArchetypeController,
-);
 
 /**
  * @openapi
@@ -35,23 +29,52 @@ router.get(
  *       401:
  *         description: Unauthorized
  */
-router.get(
-  "/me",
-  tokenVerify,
-  getPersonalityController,
-);
+router.get("/me", tokenVerify, getPersonalityController);
 
+/**
+ * @openapi
+ * /personality/me:
+ *   put:
+ *     tags: [Personality]
+ *     summary: Update trait personality (partial)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               empathy: { type: number, minimum: 0.1, maximum: 1 }
+ *               logic: { type: number, minimum: 0.1, maximum: 1 }
+ *               humor: { type: number, minimum: 0.1, maximum: 1 }
+ *               confidence: { type: number, minimum: 0.1, maximum: 1 }
+ *               playfulness: { type: number, minimum: 0.1, maximum: 1 }
+ *     responses:
+ *       200: { description: Personality diperbarui }
+ *       400: { description: Nilai tidak valid }
+ */
 router.put(
   "/me",
   tokenVerify,
+  PersonalityValidation.validateUpdate,
   updatePersonalityController,
 );
 
-router.get(
-  "/me/history",
-  tokenVerify,
-  getPersonalityHistoryController,
-);
+/**
+ * @openapi
+ * /personality/me/archetype:
+ *   get:
+ *     tags: [Personality]
+ *     summary: Hitung dan simpan archetype kognitif user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Archetype }
+ */
+router.get("/me/archetype", tokenVerify, getArchetypeController);
+
+router.get("/me/history", tokenVerify, getPersonalityHistoryController);
 
 /**
  * @openapi
@@ -61,6 +84,11 @@ router.get(
  *     summary: Ringkasan personality + tren 7 hari
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: summary
+ *         schema: { type: string, enum: ["0", "1"], default: "0" }
+ *         description: "1 = generate ringkasan naratif via LLM (cached 10 menit)"
  *     responses:
  *       200: { description: Personality insights }
  */
@@ -79,52 +107,17 @@ router.get("/me/insights", tokenVerify, getPersonalityInsightsController);
  */
 router.post("/me/reset", tokenVerify, resetPersonalityController);
 
-router.get(
-  "/:userId",
-  tokenVerify,
-  PersonalityValidation.validateGetByUser,
-  getPersonalityController,
-);
-
-router.put(
-  "/:userId",
-  tokenVerify,
-  PersonalityValidation.validateGetByUser,
-  updatePersonalityController,
-);
-
 /**
  * @openapi
- * /personality/{userId}/history:
- *   get:
+ * /personality/me/onboarding:
+ *   post:
  *     tags: [Personality]
- *     summary: Ambil riwayat evolusi kepribadian user
+ *     summary: Tandai onboarding personality selesai
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         schema:
- *           type: string
- *         required: true
- *         description: User ID
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 30
- *         description: Jumlah data snapshot yang ingin diambil
  *     responses:
- *       200:
- *         description: Riwayat kepribadian berhasil diambil
- *       401:
- *         description: Unauthorized
+ *       200: { description: Onboarding selesai }
  */
-router.get(
-  "/:userId/history",
-  tokenVerify,
-  PersonalityValidation.validateGetByUser,
-  getPersonalityHistoryController,
-);
+router.post("/me/onboarding", tokenVerify, completeOnboardingController);
 
 module.exports = router;

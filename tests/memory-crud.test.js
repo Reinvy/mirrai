@@ -70,10 +70,10 @@ describe("Memory CRUD and Personality API", () => {
     });
   });
 
-  describe("GET /api/memory/:userId with search query", () => {
+  describe("GET /api/memory/me with search query", () => {
     it("should filter memories by search query", async () => {
       const res = await request(app)
-        .get(`/api/memory/${userId}?query=teh`)
+        .get("/api/memory/me?query=teh")
         .set("Authorization", `Bearer ${authToken}`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
@@ -82,10 +82,10 @@ describe("Memory CRUD and Personality API", () => {
     });
   });
 
-  describe("PUT /api/personality/:userId", () => {
+  describe("PUT /api/personality/me", () => {
     it("should update user personality traits successfully", async () => {
       const res = await request(app)
-        .put(`/api/personality/${userId}`)
+        .put("/api/personality/me")
         .set("Authorization", `Bearer ${authToken}`)
         .send({ empathy: 0.8, logic: 0.7, humor: 0.9, confidence: 0.85, playfulness: 0.6 });
       expect(res.status).toBe(200);
@@ -106,7 +106,7 @@ describe("Memory CRUD and Personality API", () => {
 
       // Verify that it is no longer returned in the general list
       const checkRes = await request(app)
-        .get(`/api/memory/${userId}`)
+        .get("/api/memory/me")
         .set("Authorization", `Bearer ${authToken}`);
       const found = checkRes.body.data.find(m => m.id === memoryId);
       expect(found).toBeUndefined();

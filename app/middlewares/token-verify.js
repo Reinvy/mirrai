@@ -15,7 +15,9 @@ async function tokenVerify(req, res, next) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      });
     } catch {
       throw new AppError(401, "Token tidak valid atau sudah kadaluarsa");
     }

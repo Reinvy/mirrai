@@ -8,12 +8,26 @@ const { savePersonalitySnapshot } = require("../personality/personality-service"
 
 const SALT_ROUNDS = 12;
 
+// A valid bcrypt hash of an unguessable value. Comparing against it on unknown
+// usernames keeps login timing similar to the wrong-password path.
+const DUMMY_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.n6i1S0VJZlKkLQ9jBA1x3z/PzVQ4oZa";
+
 async function register(name, password) {
+  const username = name.trim();
+
+  const existing = await prisma.user.findFirst({
+    where: { name: username, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new AppError(409, "Nama sudah digunakan");
+  }
+
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
   const user = await prisma.user.create({
     data: {
-      name: name.trim(),
+      name: username,
       password: hashedPassword,
       personality: {
         create: {
@@ -45,6 +59,7 @@ async function login(name, password) {
   });
 
   if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
     throw new AppError(401, "Nama atau password salah");
   }
 
@@ -63,7 +78,11 @@ async function login(name, password) {
 }
 
 async function logout(token) {
-  await prisma.tokenBlacklist.create({ data: { token } });
+  await prisma.tokenBlacklist.upsert({
+    where: { token },
+    update: {},
+    create: { token },
+  });
 }
 
 async function changePassword(userId, oldPassword, newPassword) {
@@ -96,11 +115,12 @@ async function changePassword(userId, oldPassword, newPassword) {
 
 async function deleteAccount(userId) {
   const now = new Date();
-  // Soft-delete the user; cascade to personality, memories, conversations, threads, history
+  // Soft-delete every user-owned row so nothing stays visible through public
+  // endpoints, and free the unique username for re-registration.
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: userId },
-      data: { deletedAt: now },
+    await tx.thread.updateMany({
+      where: { userId, deletedAt: null },
+      data: { isPublic: false, shareSlug: null, deletedAt: now },
     });
     await tx.personality.updateMany({
       where: { userId },
@@ -118,44 +138,108 @@ async function deleteAccount(userId) {
       where: { userId, deletedAt: null },
       data: { deletedAt: now },
     });
-    await tx.thread.updateMany({
+    await tx.simulationSession.updateMany({
       where: { userId, deletedAt: null },
       data: { deletedAt: now },
+    });
+    await tx.dailyResonance.updateMany({
+      where: { userId, deletedAt: null },
+      data: { deletedAt: now },
+    });
+    await tx.dreamEntry.updateMany({
+      where: { userId, deletedAt: null },
+      data: { deletedAt: now },
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        name: `deleted_${userId.slice(0, 20)}`,
+        bio: null,
+        isPublicProfile: false,
+        byokEnabled: false,
+        byokApiKey: null,
+        byokBaseUrl: null,
+        byokModel: null,
+        byokThinkingEnabled: false,
+        byokVisionEnabled: false,
+        deletedAt: now,
+      },
     });
   });
 }
 
 async function exportUserData(userId) {
-  const [user, personality, memories, threads, conversations, personalityHistory] =
-    await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, createdAt: true },
-      }),
-      prisma.personality.findUnique({ where: { userId } }),
-      prisma.memory.findMany({
-        where: { userId, deletedAt: null },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.thread.findMany({
-        where: { userId, deletedAt: null },
-        orderBy: { createdAt: "desc" },
-        include: {
-          conversations: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: "asc" },
-          },
+  const [
+    user,
+    personality,
+    memories,
+    threads,
+    conversations,
+    personalityHistory,
+    simulations,
+    resonances,
+    dreamEntries,
+  ] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        bio: true,
+        isPublicProfile: true,
+        onboardingCompleted: true,
+        tier: true,
+        createdAt: true,
+      },
+    }),
+    prisma.personality.findFirst({ where: { userId, deletedAt: null } }),
+    prisma.memory.findMany({
+      where: { userId, deletedAt: null },
+      select: {
+        id: true,
+        content: true,
+        type: true,
+        category: true,
+        importanceScore: true,
+        emotionalValence: true,
+        associations: true,
+        lastUsedAt: true,
+        consolidatedAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.thread.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      include: {
+        conversations: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "asc" },
         },
-      }),
-      prisma.conversation.findMany({
-        where: { userId, deletedAt: null },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.personalityHistory.findMany({
-        where: { userId },
-        orderBy: { createdAt: "asc" },
-      }),
-    ]);
+      },
+    }),
+    prisma.conversation.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.personalityHistory.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.simulationSession.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.dailyResonance.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { date: "desc" },
+    }),
+    prisma.dreamEntry.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   return {
     exportedAt: new Date().toISOString(),
@@ -165,6 +249,9 @@ async function exportUserData(userId) {
     memories,
     conversations,
     threads,
+    simulations,
+    resonances,
+    dreamEntries,
   };
 }
 

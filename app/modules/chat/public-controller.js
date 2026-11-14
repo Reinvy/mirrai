@@ -5,6 +5,8 @@ const { prisma } = require("../../config/db");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 const { AppError } = require("../../utils/app-error");
 
+const TRAITS = ["empathy", "logic", "humor", "confidence", "playfulness"];
+
 async function getPublicProfileController(req, res, next) {
   try {
     const { username } = req.params;
@@ -21,6 +23,7 @@ async function getPublicProfileController(req, res, next) {
             humor: true,
             confidence: true,
             playfulness: true,
+            deletedAt: true,
           },
         },
       },
@@ -28,9 +31,23 @@ async function getPublicProfileController(req, res, next) {
     if (!user) {
       throw new AppError(404, "Profile tidak ditemukan atau private");
     }
+    const { personality, ...rest } = user;
+    const data = {
+      ...rest,
+      personality:
+        personality && !personality.deletedAt
+          ? {
+              empathy: personality.empathy,
+              logic: personality.logic,
+              humor: personality.humor,
+              confidence: personality.confidence,
+              playfulness: personality.playfulness,
+            }
+          : null,
+    };
     res
       .status(200)
-      .json(formatSuccessResponse({ message: "Public profile", data: user }));
+      .json(formatSuccessResponse({ message: "Public profile", data }));
   } catch (err) {
     next(err);
   }
@@ -55,12 +72,19 @@ async function getPublicThreadsController(req, res, next) {
         title: true,
         shareSlug: true,
         createdAt: true,
-        _count: { select: { conversations: true } },
+        conversations: {
+          where: { deletedAt: null },
+          select: { id: true },
+        },
       },
     });
+    const data = threads.map(({ conversations, ...thread }) => ({
+      ...thread,
+      conversationCount: conversations.length,
+    }));
     res
       .status(200)
-      .json(formatSuccessResponse({ message: "Public threads", data: threads }));
+      .json(formatSuccessResponse({ message: "Public threads", data }));
   } catch (err) {
     next(err);
   }
@@ -90,32 +114,47 @@ async function compareController(req, res, next) {
     if (u1 === u2) {
       throw new AppError(400, "Pilih dua user yang berbeda");
     }
+    const selection = {
+      name: true,
+      bio: true,
+      personality: {
+        select: {
+          empathy: true,
+          logic: true,
+          humor: true,
+          confidence: true,
+          playfulness: true,
+          deletedAt: true,
+        },
+      },
+    };
     const [a, b] = await Promise.all([
       prisma.user.findFirst({
         where: { name: u1, isPublicProfile: true, deletedAt: null },
-        select: {
-          name: true,
-          bio: true,
-          personality: true,
-        },
+        select: selection,
       }),
       prisma.user.findFirst({
         where: { name: u2, isPublicProfile: true, deletedAt: null },
-        select: {
-          name: true,
-          bio: true,
-          personality: true,
-        },
+        select: selection,
       }),
     ]);
     if (!a || !b) {
       throw new AppError(404, "Salah satu profile private atau tidak ditemukan");
     }
-    const traits = ["empathy", "logic", "humor", "confidence", "playfulness"];
+
+    const stripDeleted = (personality) =>
+      personality && !personality.deletedAt
+        ? Object.fromEntries(TRAITS.map((t) => [t, personality[t]]))
+        : null;
+
+    const cleanA = { name: a.name, bio: a.bio, personality: stripDeleted(a.personality) };
+    const cleanB = { name: b.name, bio: b.bio, personality: stripDeleted(b.personality) };
+
     const diff = {};
-    for (const t of traits) {
-      if (a.personality && b.personality) {
-        diff[t] = Math.round((a.personality[t] - b.personality[t]) * 100) / 100;
+    for (const t of TRAITS) {
+      if (cleanA.personality && cleanB.personality) {
+        diff[t] =
+          Math.round((cleanA.personality[t] - cleanB.personality[t]) * 100) / 100;
       } else {
         diff[t] = 0;
       }
@@ -123,7 +162,7 @@ async function compareController(req, res, next) {
     res.status(200).json(
       formatSuccessResponse({
         message: "Compare",
-        data: { u1: a, u2: b, diff },
+        data: { u1: cleanA, u2: cleanB, diff },
       }),
     );
   } catch (err) {

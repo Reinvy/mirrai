@@ -46,10 +46,10 @@ describe("Personality History API", () => {
     });
   });
 
-  describe("GET /api/personality/:userId/history", () => {
+  describe("GET /api/personality/me/history", () => {
     it("should retrieve historical snapshots", async () => {
       const res = await request(app)
-        .get(`/api/personality/${userId}/history`)
+        .get("/api/personality/me/history")
         .set("Authorization", `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
@@ -69,7 +69,7 @@ describe("Personality History API", () => {
       });
 
       const res = await request(app)
-        .get(`/api/personality/${userId}/history?limit=2`)
+        .get("/api/personality/me/history?limit=2")
         .set("Authorization", `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
@@ -80,10 +80,10 @@ describe("Personality History API", () => {
     });
   });
 
-  describe("PUT /api/personality/:userId", () => {
+  describe("PUT /api/personality/me", () => {
     it("should log a new snapshot in history when traits are updated", async () => {
       const updateRes = await request(app)
-        .put(`/api/personality/${userId}`)
+        .put("/api/personality/me")
         .set("Authorization", `Bearer ${authToken}`)
         .send({
           empathy: 0.8,

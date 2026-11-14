@@ -17,9 +17,17 @@ async function getMyQuotaController(req, res, next) {
 
 async function upgradeToProController(req, res, next) {
   try {
-    // Stub: in production, integrate Stripe / Paddle / Lemonsqueezy
-    // For now, this is a no-op that just sets tier. Real payment integration
-    // is a separate stage.
+    // Self-service upgrade has no payment provider behind it. Only expose it
+    // outside production, or when explicitly enabled.
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.ENABLE_DEV_UPGRADE !== "true"
+    ) {
+      throw new AppError(
+        403,
+        "Upgrade mandiri dinonaktifkan. Hubungi admin untuk berlangganan Pro.",
+      );
+    }
     const updated = await setUserTier(req.credentials.id, "pro");
     res
       .status(200)

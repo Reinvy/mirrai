@@ -5,6 +5,7 @@ const {
   updatePersonality,
   getPersonalityHistory,
   resetPersonality,
+  completeOnboarding,
 } = require("./personality-service");
 const { calculateArchetype } = require("./archetype-service");
 const { getPersonalityInsights } = require("../../services/insights");
@@ -13,8 +14,7 @@ const { AppError } = require("../../utils/app-error");
 
 async function getPersonalityController(req, res, next) {
   try {
-    const userId = req.params.userId || req.credentials.id;
-    const personality = await getPersonality(userId);
+    const personality = await getPersonality(req.credentials.id);
     res.status(200).json(
       formatSuccessResponse({
         message: "Personality berhasil diambil",
@@ -28,8 +28,7 @@ async function getPersonalityController(req, res, next) {
 
 async function getArchetypeController(req, res, next) {
   try {
-    const userId = req.params.userId || req.credentials.id;
-    const data = await calculateArchetype(userId);
+    const data = await calculateArchetype(req.credentials.id);
     res.status(200).json(
       formatSuccessResponse({
         message: "Cognitive DNA & Archetype berhasil dihitung",
@@ -43,8 +42,7 @@ async function getArchetypeController(req, res, next) {
 
 async function updatePersonalityController(req, res, next) {
   try {
-    const userId = req.params.userId || req.credentials.id;
-    const updated = await updatePersonality(userId, req.body);
+    const updated = await updatePersonality(req.credentials.id, req.body);
     res.status(200).json(
       formatSuccessResponse({
         message: "Personality berhasil diperbarui",
@@ -58,7 +56,7 @@ async function updatePersonalityController(req, res, next) {
 
 async function getPersonalityHistoryController(req, res, next) {
   try {
-    const userId = req.params.userId || req.credentials.id;
+    const userId = req.credentials.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 200, 500);
     const { from, to } = req.query;
     if (from && isNaN(Date.parse(from))) {
@@ -81,8 +79,7 @@ async function getPersonalityHistoryController(req, res, next) {
 
 async function resetPersonalityController(req, res, next) {
   try {
-    const userId = req.params.userId || req.credentials.id;
-    const updated = await resetPersonality(userId);
+    const updated = await resetPersonality(req.credentials.id);
     res.status(200).json(
       formatSuccessResponse({
         message: "Personality di-reset ke default",
@@ -96,11 +93,27 @@ async function resetPersonalityController(req, res, next) {
 
 async function getPersonalityInsightsController(req, res, next) {
   try {
-    const userId = req.params.userId || req.credentials.id;
-    const data = await getPersonalityInsights(userId);
+    const includeSummary = req.query.summary === "1";
+    const data = await getPersonalityInsights(req.credentials.id, {
+      includeSummary,
+    });
     res.status(200).json(
       formatSuccessResponse({
         message: "Personality insights",
+        data,
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function completeOnboardingController(req, res, next) {
+  try {
+    const data = await completeOnboarding(req.credentials.id);
+    res.status(200).json(
+      formatSuccessResponse({
+        message: "Onboarding selesai",
         data,
       }),
     );
@@ -116,4 +129,5 @@ module.exports = {
   getPersonalityHistoryController,
   resetPersonalityController,
   getPersonalityInsightsController,
+  completeOnboardingController,
 };

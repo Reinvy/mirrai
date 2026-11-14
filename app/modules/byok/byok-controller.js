@@ -45,8 +45,14 @@ async function deleteByokController(req, res, next) {
 
 async function testByokController(req, res, next) {
   try {
-    const { baseUrl, apiKey, model } = req.body || {};
-    const result = await testByokConnection({ baseUrl, apiKey, model });
+    const { baseUrl, apiKey, model, thinkingEnabled, visionEnabled } = req.body || {};
+    const result = await testByokConnection(req.credentials.id, {
+      baseUrl,
+      apiKey,
+      model,
+      thinkingEnabled,
+      visionEnabled,
+    });
     res.status(200).json(formatSuccessResponse({ message: "BYOK test result", data: result }));
   } catch (err) {
     next(err);

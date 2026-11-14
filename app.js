@@ -3,16 +3,20 @@
 require("dotenv").config();
 
 const express = require("express");
-const path = require("path");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
 
 const { swaggerSpec } = require("./app/config/openapi");
 const { apiReference } = require("@scalar/express-api-reference");
 const { errorHandler } = require("./app/middlewares/error-handler");
+const {
+  authLimiter,
+  writeLimiter,
+  createReadLimiter,
+} = require("./app/middlewares/rate-limiters");
 const { AppError } = require("./app/utils/app-error");
+const { assertCryptoConfig } = require("./app/utils/crypto");
 const { startTokenCleanupJob } = require("./app/services/token-cleanup-service");
 const { startMemoryTuningJob } = require("./app/services/memory-tuning");
 
@@ -25,49 +29,27 @@ const simulationRouter = require("./app/modules/simulation/simulation-router");
 const dreamRouter = require("./app/modules/dream/dream-router");
 const byokRouter = require("./app/modules/byok/byok-router");
 
+assertCryptoConfig();
+
 const app = express();
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Terlalu banyak percobaan. Coba lagi dalam 15 menit.",
-  },
-});
-const writeLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Terlalu banyak request. Coba lagi sebentar lagi.",
-  },
-});
-const readLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Terlalu banyak request. Coba lagi sebentar lagi.",
-  },
-});
+// Behind N proxies (0 = direct). Required for correct client IPs in limiters.
+app.set("trust proxy", Number(process.env.TRUST_PROXY || 0));
 
-// Security & CORS
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ?? "http://localhost:3000,http://localhost:3001"
-).split(",");
+)
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+// Security & CORS
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin))
-        return callback(null, true);
-      callback(null, true); // Allow during development
+      // Same-origin / server-to-server requests have no Origin header.
+      if (!origin) return callback(null, true);
+      callback(null, allowedOrigins.includes(origin));
     },
     credentials: true,
   }),
@@ -92,10 +74,15 @@ app.use(morgan("dev"));
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: false, limit: "25mb" }));
 
+// Credential endpoints get the strict limiter; the rest of /api/auth (e.g.
+// /me) must not be throttled by a shared 20-per-15-minutes budget.
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+
 // API routes
-app.use("/api/auth", authLimiter, authRouter);
-app.use("/api/memory", readLimiter, memoryRouter);
-app.use("/api/personality", readLimiter, personalityRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/memory", createReadLimiter(), memoryRouter);
+app.use("/api/personality", createReadLimiter(), personalityRouter);
 app.use("/api/chat", chatRouter); // chat-router applies its own per-route limiter
 app.use("/api/simulation", writeLimiter, simulationRouter);
 app.use("/api/dream", writeLimiter, dreamRouter);

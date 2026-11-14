@@ -4,6 +4,14 @@ require("./setup");
 
 const request = require("supertest");
 
+// Keep the SSRF guard deterministic and offline: every hostname resolves to a
+// public address (the real resolver in this sandbox returns NAT64/ULA answers).
+jest.mock("dns", () => ({
+  promises: {
+    lookup: jest.fn().mockResolvedValue([{ address: "93.184.216.34", family: 4 }]),
+  },
+}));
+
 jest.mock("../app/services/llm-resolver", () => {
   const actual = jest.requireActual("../app/services/llm-resolver");
   return {
@@ -218,12 +226,38 @@ describe("BYOK API", () => {
           model: "gpt-4o-mini",
         });
       expect(res.status).toBe(200);
-      expect(testByokConnection).toHaveBeenCalledWith({
-        baseUrl: "https://api.openai.com/v1",
-        apiKey: "sk-abcdefgh1234",
-        model: "gpt-4o-mini",
-      });
+      expect(testByokConnection).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "sk-abcdefgh1234",
+          model: "gpt-4o-mini",
+        }),
+      );
       expect(res.body.data.ok).toBe(true);
+    });
+
+    it("should accept a test without apiKey when one is already stored", async () => {
+      const { testByokConnection } = require("../app/services/llm-resolver");
+      await request(app)
+        .put("/api/byok")
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({
+          enabled: true,
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "sk-storedkey1234",
+          model: "gpt-4o-mini",
+        });
+      testByokConnection.mockClear();
+
+      const res = await request(app)
+        .post("/api/byok/test")
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({ baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" });
+
+      expect(res.status).toBe(200);
+      expect(testByokConnection).toHaveBeenCalledTimes(1);
+      expect(testByokConnection.mock.calls[0][1].apiKey).toBeUndefined();
     });
   });
 

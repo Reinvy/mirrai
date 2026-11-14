@@ -4,7 +4,6 @@ const express = require("express");
 const { MemoryValidation } = require("./memory-validation");
 const {
   getMemoriesController,
-  getMemoryGraphController,
   createMemoryController,
   updateMemoryController,
   deleteMemoryController,
@@ -15,8 +14,6 @@ const { tokenVerify } = require("../../middlewares/token-verify");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
 
 const router = express.Router();
-
-router.get("/graph/:userId", tokenVerify, getMemoryGraphController);
 
 /**
  * @openapi
@@ -67,8 +64,6 @@ router.get("/insights", tokenVerify, memoryInsightsController);
  *         description: nodes + edges
  */
 router.get("/graph", tokenVerify, memoryGraphController);
-
-router.get("/:userId", tokenVerify, getMemoriesController);
 
 router.post(
   "/",

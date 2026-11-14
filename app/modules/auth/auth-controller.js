@@ -58,6 +58,7 @@ async function meController(req, res, next) {
         name: true,
         bio: true,
         isPublicProfile: true,
+        onboardingCompleted: true,
         createdAt: true,
       },
     });

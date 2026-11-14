@@ -43,17 +43,11 @@ const ARCHETYPES = [
 ];
 
 async function calculateArchetype(userId) {
-  const personality = await getPersonality(userId).catch(() => ({
-    empathy: 0.7,
-    logic: 0.8,
-    humor: 0.6,
-    confidence: 0.75,
-    playfulness: 0.65,
-  }));
+  const personality = await getPersonality(userId);
 
   const memoryCount = await prisma.memory.count({
     where: { userId, deletedAt: null },
-  }).catch(() => 12);
+  });
 
   // Big Five Mapping
   const bigFive = {
@@ -79,6 +73,11 @@ async function calculateArchetype(userId) {
     99,
     Math.round(45 + memoryCount * 2.5 + (personality.logic + personality.empathy) * 15),
   );
+
+  await prisma.personality.update({
+    where: { userId },
+    data: { archetype: chosen.name },
+  });
 
   return {
     archetype: chosen,

@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const { prisma } = require("../../config/db");
 const { getLlm } = require("../../config/openai");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
@@ -39,6 +40,21 @@ async function getThreadsByUser(userId) {
   });
 }
 
+async function getThreadOwned(threadId, userId) {
+  const thread = await prisma.thread.findFirst({
+    where: { id: threadId, userId, deletedAt: null },
+  });
+  if (!thread) {
+    throw new AppError(404, "Thread tidak ditemukan");
+  }
+  return thread;
+}
+
+async function getOwnedThread(threadId, userId) {
+  await getThreadOwned(threadId, userId);
+  return { id: threadId };
+}
+
 async function updateThread(threadId, userId, { title }) {
   if (!title || typeof title !== "string" || title.trim().length === 0) {
     throw new AppError(400, "Judul thread tidak boleh kosong");
@@ -47,18 +63,7 @@ async function updateThread(threadId, userId, { title }) {
     throw new AppError(400, `Judul thread terlalu panjang (maks ${MAX_THREAD_TITLE_LEN} karakter)`);
   }
 
-  // Verify ownership
-  const thread = await prisma.thread.findFirst({
-    where: {
-      id: threadId,
-      userId,
-      deletedAt: null,
-    },
-  });
-
-  if (!thread) {
-    throw new AppError(404, "Thread tidak ditemukan");
-  }
+  await getThreadOwned(threadId, userId);
 
   return await prisma.thread.update({
     where: { id: threadId },
@@ -67,42 +72,32 @@ async function updateThread(threadId, userId, { title }) {
 }
 
 function generateShareSlug() {
-  // 16 chars, URL-safe
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let slug = "";
-  for (let i = 0; i < 16; i++) {
-    slug += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return slug;
+  return crypto.randomBytes(16).toString("base64url");
 }
 
 async function shareThread(threadId, userId) {
-  // Verify ownership
-  const thread = await prisma.thread.findFirst({
-    where: { id: threadId, userId, deletedAt: null },
-  });
-  if (!thread) {
-    throw new AppError(404, "Thread tidak ditemukan");
-  }
+  const thread = await getThreadOwned(threadId, userId);
   // Reuse slug if already public
   let slug = thread.shareSlug;
   if (!slug) {
     slug = generateShareSlug();
   }
-  const updated = await prisma.thread.update({
-    where: { id: threadId },
-    data: { isPublic: true, shareSlug: slug },
-  });
-  return updated;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.thread.update({
+        where: { id: threadId },
+        data: { isPublic: true, shareSlug: slug },
+      });
+    } catch (err) {
+      if (err.code !== "P2002" || attempt === 2) throw err;
+      slug = generateShareSlug();
+    }
+  }
+  throw new AppError(500, "Gagal membuat tautan share");
 }
 
 async function unshareThread(threadId, userId) {
-  const thread = await prisma.thread.findFirst({
-    where: { id: threadId, userId, deletedAt: null },
-  });
-  if (!thread) {
-    throw new AppError(404, "Thread tidak ditemukan");
-  }
+  await getThreadOwned(threadId, userId);
   return prisma.thread.update({
     where: { id: threadId },
     data: { isPublic: false, shareSlug: null },
@@ -110,9 +105,17 @@ async function unshareThread(threadId, userId) {
 }
 
 async function getSharedThread(slug) {
-  const thread = await prisma.thread.findFirst({
-    where: { shareSlug: slug, isPublic: true, deletedAt: null },
-    include: {
+  return prisma.thread.findFirst({
+    where: {
+      shareSlug: slug,
+      isPublic: true,
+      deletedAt: null,
+      user: { deletedAt: null },
+    },
+    select: {
+      id: true,
+      title: true,
+      createdAt: true,
       conversations: {
         where: { deletedAt: null },
         orderBy: { createdAt: "asc" },
@@ -125,27 +128,14 @@ async function getSharedThread(slug) {
         },
       },
       user: {
-        select: { name: true, isPublicProfile: true, bio: true },
+        select: { name: true },
       },
     },
   });
-  if (!thread) return null;
-  return thread;
 }
 
 async function deleteThread(threadId, userId) {
-  // Verify ownership
-  const thread = await prisma.thread.findFirst({
-    where: {
-      id: threadId,
-      userId,
-      deletedAt: null,
-    },
-  });
-
-  if (!thread) {
-    throw new AppError(404, "Thread tidak ditemukan");
-  }
+  await getThreadOwned(threadId, userId);
 
   const now = new Date();
 
@@ -254,4 +244,6 @@ module.exports = {
   shareThread,
   unshareThread,
   getSharedThread,
+  getThreadOwned,
+  getOwnedThread,
 };

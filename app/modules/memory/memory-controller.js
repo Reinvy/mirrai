@@ -12,6 +12,7 @@ const {
   getMemoryGraph,
 } = require("../../services/insights");
 const { formatSuccessResponse } = require("../../utils/response-formatter");
+const { AppError } = require("../../utils/app-error");
 
 async function getMemoriesController(req, res, next) {
   try {
@@ -39,14 +40,17 @@ async function getMemoriesController(req, res, next) {
 async function createMemoryController(req, res, next) {
   try {
     const userId = req.credentials.id;
-    const { content, type, category, importanceScore, emotionalValence } = req.body;
+    const { content, type, category, importanceScore, emotionalValence, associations } =
+      req.body;
     const memory = await saveMemory({
       userId,
-      content: content.trim(),
+      content,
       type,
       category,
       importanceScore: importanceScore !== undefined ? Number(importanceScore) : 0.5,
-      emotionalValence: emotionalValence !== undefined ? Number(emotionalValence) : 0.0,
+      emotionalValence:
+        emotionalValence !== undefined ? Number(emotionalValence) : 0.0,
+      associations: associations !== undefined ? associations : [],
     });
     res.status(201).json(
       formatSuccessResponse({
@@ -62,14 +66,17 @@ async function createMemoryController(req, res, next) {
 async function updateMemoryController(req, res, next) {
   try {
     const userId = req.credentials.id;
-    const memoryId = req.params.memoryId || req.params.id;
-    const { content, type, importanceScore, category } = req.body;
+    const memoryId = req.params.memoryId;
+    const { content, type, importanceScore, category, emotionalValence, associations } =
+      req.body;
 
     const memory = await updateMemory(memoryId, userId, {
       content,
       type,
       importanceScore,
       category,
+      emotionalValence,
+      associations,
     });
 
     res.status(200).json(
@@ -86,7 +93,7 @@ async function updateMemoryController(req, res, next) {
 async function deleteMemoryController(req, res, next) {
   try {
     const userId = req.credentials.id;
-    const memoryId = req.params.memoryId || req.params.id;
+    const memoryId = req.params.memoryId;
 
     await deleteMemory(memoryId, userId);
 
@@ -117,8 +124,15 @@ async function memoryInsightsController(req, res, next) {
 
 async function memoryGraphController(req, res, next) {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
-    const threshold = parseFloat(req.query.threshold) || 0.75;
+    const rawLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
+
+    const rawThreshold = Number(req.query.threshold);
+    const threshold = Number.isFinite(rawThreshold) ? rawThreshold : 0.75;
+    if (threshold < 0.5 || threshold > 0.99) {
+      throw new AppError(400, "Parameter threshold harus antara 0.5 dan 0.99");
+    }
+
     const data = await getMemoryGraph(req.credentials.id, {
       limit,
       similarityThreshold: threshold,
@@ -141,5 +155,4 @@ module.exports = {
   deleteMemoryController,
   memoryInsightsController,
   memoryGraphController,
-  getMemoryGraphController: memoryGraphController,
 };

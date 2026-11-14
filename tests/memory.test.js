@@ -59,17 +59,17 @@ describe("Memory API", () => {
     });
   });
 
-  describe("GET /api/memory/:userId", () => {
+  describe("GET /api/memory/me", () => {
     it("should return user memories", async () => {
       const res = await request(app)
-        .get(`/api/memory/${userId}`)
+        .get("/api/memory/me")
         .set("Authorization", `Bearer ${authToken}`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
     });
 
     it("should reject unauthenticated request", async () => {
-      const res = await request(app).get(`/api/memory/${userId}`);
+      const res = await request(app).get("/api/memory/me");
       expect(res.status).toBe(401);
     });
   });

@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
 const AUTH_TAG_LEN = 16;
+const VERSION_PREFIX = "v1:";
 
 function getKey() {
   const raw = process.env.BYOK_ENCRYPTION_KEY;
@@ -25,6 +26,14 @@ function getKey() {
   return buf;
 }
 
+/**
+ * Fail fast at boot instead of on the first BYOK request: a production server
+ * without a valid encryption key cannot store or read user API keys.
+ */
+function assertCryptoConfig() {
+  getKey();
+}
+
 function encrypt(plaintext) {
   if (typeof plaintext !== "string" || plaintext.length === 0) {
     return null;
@@ -37,7 +46,7 @@ function encrypt(plaintext) {
   const cipher = crypto.createCipheriv(ALGO, key, iv);
   const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
-  return [iv, enc, authTag].map((b) => b.toString("base64")).join(".");
+  return VERSION_PREFIX + [iv, enc, authTag].map((b) => b.toString("base64")).join(".");
 }
 
 function decrypt(encrypted) {
@@ -48,7 +57,17 @@ function decrypt(encrypted) {
   if (!key) {
     return encrypted;
   }
-  const parts = encrypted.split(".");
+
+  if (!encrypted.startsWith(VERSION_PREFIX)) {
+    // Legacy, unversioned payloads. Only readable outside production, where a
+    // missing key meant the value was stored as plaintext.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Unversioned ciphertext is not supported in production");
+    }
+    return encrypted;
+  }
+
+  const parts = encrypted.slice(VERSION_PREFIX.length).split(".");
   if (parts.length !== 3) {
     throw new Error("Malformed encrypted value");
   }
@@ -70,4 +89,4 @@ function maskApiKey(key) {
   return key.slice(0, 4) + "•".repeat(Math.min(8, key.length - 8)) + key.slice(-4);
 }
 
-module.exports = { encrypt, decrypt, maskApiKey };
+module.exports = { encrypt, decrypt, maskApiKey, assertCryptoConfig };

@@ -21,10 +21,10 @@ describe("Personality API", () => {
     userId = loginRes.body.data.user.id;
   });
 
-  describe("GET /api/personality/:userId", () => {
+  describe("GET /api/personality/me", () => {
     it("should return personality with default traits", async () => {
       const res = await request(app)
-        .get(`/api/personality/${userId}`)
+        .get("/api/personality/me")
         .set("Authorization", `Bearer ${authToken}`);
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty("empathy", 0.5);
@@ -35,8 +35,15 @@ describe("Personality API", () => {
     });
 
     it("should reject unauthenticated request", async () => {
-      const res = await request(app).get(`/api/personality/${userId}`);
+      const res = await request(app).get("/api/personality/me");
       expect(res.status).toBe(401);
+    });
+
+    it("should not expose another user's personality by path", async () => {
+      const res = await request(app)
+        .get(`/api/personality/${userId}`)
+        .set("Authorization", `Bearer ${authToken}`);
+      expect(res.status).toBe(404);
     });
   });
 });
