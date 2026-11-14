@@ -73,7 +73,10 @@ async function retrieveMemorySafe(args) {
  * attachment validation, thread ownership, quota, and context loading.
  */
 async function prepareChatStream(userId, message, threadId, attachments, persona) {
-  const { llm, byok, visionEnabled } = await getLlmForUser(userId);
+  const { llm, byok, visionEnabled } = await getLlmForUser(
+    userId,
+    threadId ? { sessionId: `mirrai-thread-${threadId}` } : undefined,
+  );
 
   if (attachments && attachments.length > MAX_ATTACHMENTS) {
     throw new AppError(400, `Maksimal ${MAX_ATTACHMENTS} lampiran per pesan`);

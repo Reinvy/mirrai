@@ -15,9 +15,13 @@ function buildReasoningPayload(enabled) {
   return { effort: DEFAULT_THINKING_EFFORT };
 }
 
-function systemLlm() {
+function sessionFor(userId, sessionId) {
+  return sessionId ?? `mirrai-user-${userId}`;
+}
+
+function systemLlm(sessionId) {
   return {
-    llm: getLlm(),
+    llm: getLlm({ sessionId }),
     byok: false,
     thinkingEnabled: false,
     visionEnabled: false,
@@ -40,13 +44,14 @@ async function getUserByokConfig(userId) {
   return user;
 }
 
-async function getLlmForUser(userId) {
+async function getLlmForUser(userId, { sessionId } = {}) {
+  const resolvedSessionId = sessionFor(userId, sessionId);
   const user = await getUserByokConfig(userId);
   if (!user || !user.byokEnabled) {
-    return systemLlm();
+    return systemLlm(resolvedSessionId);
   }
   if (!user.byokApiKey || !user.byokBaseUrl || !user.byokModel) {
-    return systemLlm();
+    return systemLlm(resolvedSessionId);
   }
 
   try {
@@ -57,7 +62,7 @@ async function getLlmForUser(userId) {
       userId,
       error: err.message,
     });
-    return systemLlm();
+    return systemLlm(resolvedSessionId);
   }
 
   let apiKey;
@@ -69,7 +74,7 @@ async function getLlmForUser(userId) {
       userId,
       error: err.message,
     });
-    return systemLlm();
+    return systemLlm(resolvedSessionId);
   }
 
   const thinkingEnabled = Boolean(user.byokThinkingEnabled);
@@ -79,6 +84,7 @@ async function getLlmForUser(userId) {
       apiKey,
       baseURL: user.byokBaseUrl,
       model: user.byokModel,
+      sessionId: resolvedSessionId,
       reasoning: buildReasoningPayload(thinkingEnabled),
     }),
   );
@@ -216,6 +222,7 @@ async function testByokConnection(
       apiKey: resolvedKey,
       baseURL: baseUrl,
       model,
+      sessionId: sessionFor(userId, null),
       temperature: 0,
       reasoning: buildReasoningPayload(Boolean(thinkingEnabled)),
     }),

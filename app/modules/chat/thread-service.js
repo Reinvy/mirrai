@@ -199,7 +199,7 @@ async function generateThreadTitle(threadId, userId, { llm: providedLlm, convers
     let title = "";
 
     try {
-      const llm = providedLlm || getLlm();
+      const llm = providedLlm || getLlm({ sessionId: `mirrai-thread-${threadId}` });
       const prompt = ChatPromptTemplate.fromMessages([
         [
           "system",

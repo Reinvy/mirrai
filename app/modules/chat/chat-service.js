@@ -129,7 +129,10 @@ async function processChat(userId, message, threadId = null, attachments = [], p
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId, threadId });
 
-  const { llm, byok, visionEnabled } = await getLlmForUser(userId);
+  const { llm, byok, visionEnabled } = await getLlmForUser(
+    userId,
+    threadId ? { sessionId: `mirrai-thread-${threadId}` } : undefined,
+  );
 
   if (attachments && attachments.length > MAX_ATTACHMENTS) {
     throw new AppError(400, `Maksimal ${MAX_ATTACHMENTS} lampiran per pesan`);

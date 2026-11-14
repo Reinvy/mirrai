@@ -54,6 +54,7 @@ TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mirrai_test \
 | `OPENAI_MODEL` |   | `deepseek-v4-flash` | Model name |
 | `OPENAI_API_BASE_URL` |   | — | Override base URL (untuk self-hosted gateway, dll) |
 | `OPENAI_TEMPERATURE` |   | `0.7` | LLM temperature |
+| `OPENAI_USER_AGENT` |   | `MirrAI/1.0` | User-Agent untuk host `opencode.ai` (gateway Go). Header `x-opencode-session` dikirim otomatis dengan id per thread/user agar routing & prompt cache stabil. |
 | `BYOK_ENCRYPTION_KEY` |   | — | 32-byte base64 key untuk encrypt BYOK API keys. Wajib di production (boot gagal tanpa ini), optional di dev. |
 | `BYOK_ALLOW_PRIVATE_HOSTS` |   | `false` | Izinkan BYOK `baseUrl` ke host privat/loopback (mis. Ollama lokal). Metadata cloud tetap diblokir. |
 | `LLM_TIMEOUT_MS` |   | `60000` | Timeout per request LLM |
