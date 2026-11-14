@@ -200,25 +200,28 @@ async function* streamPreparedChat(prep, { signal } = {}) {
   let fullReasoning = "";
   let completed = false;
   let persisted = false;
-
-  yield JSON.stringify({
-    event: "meta",
-    threadId: prep.threadId,
-    emotion: prep.emotion,
-    persona: prep.persona,
-  });
-
-  // Memory extraction runs alongside the token stream; its result is only
-  // needed after the conversation row exists.
-  const extractionPromise = extractMemories(
-    { userInput: prep.message, emotion: prep.emotion },
-    { llm: prep.llm },
-  ).catch((err) => {
-    logger.warn({ message: "Memory extraction failed, continuing", error: err.message });
-    return [];
-  });
+  // Assigned after the meta event so a client that disconnects immediately is
+  // still handled by the finally block below.
+  let extractionPromise = Promise.resolve([]);
 
   try {
+    yield JSON.stringify({
+      event: "meta",
+      threadId: prep.threadId,
+      emotion: prep.emotion,
+      persona: prep.persona,
+    });
+
+    // Memory extraction runs alongside the token stream; its result is only
+    // needed after the conversation row exists.
+    extractionPromise = extractMemories(
+      { userInput: prep.message, emotion: prep.emotion },
+      { llm: prep.llm },
+    ).catch((err) => {
+      logger.warn({ message: "Memory extraction failed, continuing", error: err.message });
+      return [];
+    });
+
     for await (const event of streamResponse(
       {
         userInput: prep.message,

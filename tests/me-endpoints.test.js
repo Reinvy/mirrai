@@ -31,11 +31,27 @@ describe("Me endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty("id", userId);
       expect(res.body.data).toHaveProperty("name");
+      expect(res.body.data).toHaveProperty("onboardingCompleted", false);
     });
 
     it("should 401 without token", async () => {
       const res = await request(app).get("/api/auth/me");
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe("POST /api/personality/me/onboarding", () => {
+    it("marks onboarding complete and reflects it on /auth/me", async () => {
+      const res = await request(app)
+        .post("/api/personality/me/onboarding")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ onboardingCompleted: true });
+
+      const me = await request(app)
+        .get("/api/auth/me")
+        .set("Authorization", `Bearer ${token}`);
+      expect(me.body.data.onboardingCompleted).toBe(true);
     });
   });
 

@@ -14,6 +14,17 @@ jest.mock("../app/services/response", () => ({
     .fn()
     .mockResolvedValue({ text: "Ini adalah respons test dari MirrAI.", reasoning: null }),
 }));
+jest.mock("../app/services/memory-extraction", () => ({
+  extractMemories: jest.fn().mockResolvedValue([]),
+}));
+jest.mock("../app/services/evolution", () => {
+  const actual = jest.requireActual("../app/services/evolution");
+  return { ...actual, evolvePersonality: jest.fn(actual.evolvePersonality) };
+});
+jest.mock("../app/modules/chat/thread-service", () => {
+  const actual = jest.requireActual("../app/modules/chat/thread-service");
+  return { ...actual, generateThreadTitle: jest.fn().mockResolvedValue({ changed: false }) };
+});
 
 const app = require("../app");
 

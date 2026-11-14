@@ -111,5 +111,79 @@ describe("Memory CRUD and Personality API", () => {
       const found = checkRes.body.data.find(m => m.id === memoryId);
       expect(found).toBeUndefined();
     });
+
+    it("should 404 when deleting an unknown memory", async () => {
+      const res = await request(app)
+        .delete("/api/memory/does-not-exist")
+        .set("Authorization", `Bearer ${authToken}`);
+      expect(res.status).toBe(404);
+    });
+
+    it("should not resurrect a deleted memory on update", async () => {
+      const res = await request(app)
+        .put(`/api/memory/${memoryId}`)
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({ content: "Mencoba menghidupkan lagi" });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("Memory associations", () => {
+    it("persists associations and emotional valence on create and update", async () => {
+      const created = await request(app)
+        .post("/api/memory")
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({
+          content: "Suka berjalan pagi di taman",
+          type: "SEMANTIC",
+          associations: ["pagi", "kesehatan"],
+          emotionalValence: 0.4,
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.data.associations).toEqual(["pagi", "kesehatan"]);
+
+      const updated = await request(app)
+        .put(`/api/memory/${created.body.data.id}`)
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({ associations: ["pagi", "rutinitas"], emotionalValence: -0.2 });
+      expect(updated.status).toBe(200);
+      expect(updated.body.data.associations).toEqual(["pagi", "rutinitas"]);
+      expect(updated.body.data.emotionalValence).toBeCloseTo(-0.2);
+
+      const listed = await request(app)
+        .get("/api/memory/me")
+        .set("Authorization", `Bearer ${authToken}`);
+      const found = listed.body.data.find((m) => m.id === created.body.data.id);
+      expect(found.associations).toEqual(["pagi", "rutinitas"]);
+    });
+
+    it("rejects a memory id owned by someone else", async () => {
+      const otherName = `other_mem_${Date.now().toString(36)}`;
+      await request(app)
+        .post("/api/auth/register")
+        .send({ name: otherName, password: "testpass123" });
+      const otherLogin = await request(app)
+        .post("/api/auth/login")
+        .send({ name: otherName, password: "testpass123" });
+      const otherToken = otherLogin.body.data.token;
+
+      const created = await request(app)
+        .post("/api/memory")
+        .set("Authorization", `Bearer ${otherToken}`)
+        .send({ content: "Memori milik orang lain", type: "SEMANTIC" });
+
+      const res = await request(app)
+        .put(`/api/memory/${created.body.data.id}`)
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({ content: "Dibajak" });
+      expect(res.status).toBe(404);
+    });
+
+    it("rejects an invalid graph threshold", async () => {
+      const res = await request(app)
+        .get("/api/memory/graph?threshold=0.2")
+        .set("Authorization", `Bearer ${authToken}`);
+      expect(res.status).toBe(400);
+    });
   });
 });
