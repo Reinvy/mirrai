@@ -30,6 +30,7 @@ model User {
     tokenVersion        Int                  @default(0)
     bio                 String?
     isPublicProfile     Boolean              @default(false)
+    onboardingCompleted Boolean              @default(false)
     tier                String               @default("free")
     dailyChatCount      Int                  @default(0)
     dailyCountDate      DateTime?
@@ -48,6 +49,7 @@ model User {
     personalityHistory  PersonalityHistory[]
     simulations         SimulationSession[]
     resonances          DailyResonance[]
+    dreamEntries        DreamEntry[]
 }
 
 model Thread {
@@ -70,6 +72,8 @@ model Conversation {
     response  String
     reasoning String?
     emotion   Json
+    persona   String    @default("twin")
+    partial   Boolean   @default(false)
     createdAt DateTime  @default(now())
     deletedAt DateTime?
     user      User      @relation(fields: [userId], references: [id])
@@ -87,12 +91,14 @@ model Memory {
     associations     String[]                    @default([])
     embedding        Unsupported("vector(768)")?
     lastUsedAt       DateTime?
+    consolidatedAt   DateTime?
     createdAt        DateTime                    @default(now())
     deletedAt        DateTime?
     user             User                        @relation(fields: [userId], references: [id])
 
     @@index([userId, importanceScore])
     @@index([userId, category])
+    @@index([userId, consolidatedAt])
 }
 
 model Personality {
@@ -122,27 +128,48 @@ model PersonalityHistory {
 }
 
 model SimulationSession {
-    id        String   @id @default(cuid())
+    id        String    @id @default(cuid())
     userId    String
+    type      String    @default("branch")
     title     String
     scenario  String
     branches  Json
     consensus Json?
-    createdAt DateTime @default(now())
-    user      User     @relation(fields: [userId], references: [id])
+    createdAt DateTime  @default(now())
+    deletedAt DateTime?
+    user      User      @relation(fields: [userId], references: [id])
+
+    @@index([userId, createdAt])
+}
+
+model DreamEntry {
+    id                String    @id @default(cuid())
+    userId            String
+    theme             String
+    reflection        String
+    coreBeliefs       Json      @default("[]")
+    consolidatedCount Int       @default(0)
+    createdAt         DateTime  @default(now())
+    deletedAt         DateTime?
+    user              User      @relation(fields: [userId], references: [id])
+
+    @@index([userId, createdAt])
 }
 
 model DailyResonance {
-    id         String   @id @default(cuid())
+    id         String    @id @default(cuid())
     userId     String
-    date       DateTime @default(now())
+    date       DateTime  @default(now())
+    dayKey     String
     theme      String
     reflection String
     prompt     String
-    moodAura   String   @default("#6366f1")
-    read       Boolean  @default(false)
-    user       User     @relation(fields: [userId], references: [id])
+    moodAura   String    @default("#6366f1")
+    read       Boolean   @default(false)
+    deletedAt  DateTime?
+    user       User      @relation(fields: [userId], references: [id])
 
+    @@unique([userId, dayKey])
     @@index([userId, date])
 }
 
