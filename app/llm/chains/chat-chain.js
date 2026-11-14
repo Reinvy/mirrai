@@ -26,9 +26,12 @@ async function* streamChat(input, { llm } = {}) {
   }
 }
 
-async function* streamChatRaw(input, { llm } = {}) {
+async function* streamChatRaw(input, { llm, signal } = {}) {
   const target = llm || getLlm();
-  const stream = await buildModelOnlyChain(target).stream(input);
+  const stream = await buildModelOnlyChain(target).stream(
+    input,
+    signal ? { signal } : undefined,
+  );
   for await (const chunk of stream) {
     yield chunk;
   }
@@ -67,7 +70,7 @@ async function invokeWithImages({ systemMessage, userText, attachments }, { llm 
       : String(result.content);
 }
 
-async function* streamWithImages({ systemMessage, userText, attachments }, { llm } = {}) {
+async function* streamWithImages({ systemMessage, userText, attachments }, { llm, signal } = {}) {
   const target = llm || getLlm();
   const content = [];
 
@@ -85,7 +88,7 @@ async function* streamWithImages({ systemMessage, userText, attachments }, { llm
 
   const messages = [new SystemMessage(systemMessage), new HumanMessage({ content })];
 
-  const stream = await target.stream(messages);
+  const stream = await target.stream(messages, signal ? { signal } : undefined);
   for await (const chunk of stream) {
     const text =
       typeof chunk.content === "string"

@@ -7,6 +7,7 @@ const {
   streamWithImages,
 } = require("../llm/chains/chat-chain");
 const { buildSystemPrompt, buildChatInput } = require("../llm/prompts/chat-prompt");
+const { mapTraitsToStyle } = require("../llm/style-rules");
 
 function extractReasoning(message) {
   if (!message || typeof message !== "object") return null;
@@ -56,6 +57,7 @@ function buildResponseContext({
   emotion,
   memories,
   threadContext,
+  persona,
 }) {
   return buildSystemPrompt({
     name,
@@ -65,6 +67,8 @@ function buildResponseContext({
     emotion,
     memories,
     threadContext,
+    styleRules: mapTraitsToStyle(personality),
+    persona,
   });
 }
 
@@ -79,6 +83,7 @@ async function generateResponse(params, { llm } = {}) {
     emotion,
     memories,
     threadContext,
+    persona,
   } = params;
 
   if (attachments && attachments.length > 0) {
@@ -90,6 +95,7 @@ async function generateResponse(params, { llm } = {}) {
       emotion,
       memories,
       threadContext,
+      persona,
     });
     const text = await invokeWithImages(
       { systemMessage, userText: userInput, attachments },
@@ -108,6 +114,7 @@ async function generateResponse(params, { llm } = {}) {
       memories,
       threadContext,
       userInput,
+      persona,
     }),
     { llm },
   );
@@ -118,7 +125,7 @@ async function generateResponse(params, { llm } = {}) {
   };
 }
 
-async function* streamResponse(params, { llm } = {}) {
+async function* streamResponse(params, { llm, signal } = {}) {
   const {
     userInput,
     attachments,
@@ -129,6 +136,7 @@ async function* streamResponse(params, { llm } = {}) {
     emotion,
     memories,
     threadContext,
+    persona,
   } = params;
 
   if (attachments && attachments.length > 0) {
@@ -140,10 +148,11 @@ async function* streamResponse(params, { llm } = {}) {
       emotion,
       memories,
       threadContext,
+      persona,
     });
     for await (const text of streamWithImages(
       { systemMessage, userText: userInput, attachments },
-      { llm },
+      { llm, signal },
     )) {
       yield { type: "delta", text };
     }
@@ -161,8 +170,9 @@ async function* streamResponse(params, { llm } = {}) {
       memories,
       threadContext,
       userInput,
+      persona,
     }),
-    { llm },
+    { llm, signal },
   )) {
     const reasoningDelta = extractReasoningDelta(chunk);
     if (reasoningDelta) {

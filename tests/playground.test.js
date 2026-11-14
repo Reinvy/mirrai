@@ -7,6 +7,9 @@ const request = require("supertest");
 jest.mock("../app/services/emotion", () => ({
   detectEmotion: jest.fn().mockResolvedValue({ emotion: "neutral", confidence: 0.8 }),
 }));
+jest.mock("../app/services/memory-extraction", () => ({
+  extractMemories: jest.fn().mockResolvedValue([]),
+}));
 jest.mock("../app/services/response", () => ({
   generateResponse: jest
     .fn()

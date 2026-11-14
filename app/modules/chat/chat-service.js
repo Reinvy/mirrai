@@ -2,20 +2,23 @@
 
 const { prisma } = require("../../config/db");
 const { detectEmotion } = require("../../services/emotion");
-const { generateResponse, streamResponse } = require("../../services/response");
+const { generateResponse } = require("../../services/response");
 const { evolvePersonality } = require("../../services/evolution");
 const { extractMemories } = require("../../services/memory-extraction");
 const { retrieveMemory, saveMemory } = require("../memory/memory-service");
 const { getPersonality } = require("../personality/personality-service");
 const { formatPersonalityTrend } = require("../../llm/format");
-const { createThread, generateThreadTitle } = require("./thread-service");
+const { createThread, generateThreadTitle, getOwnedThread } = require("./thread-service");
 const { assistantChain } = require("../../llm/chains/assistant-chain");
 const { logger } = require("../../config/logger");
 const { getLlmForUser } = require("../../services/llm-resolver");
+const { withQuotaForUser } = require("../../services/quota");
+const { normalizePersona } = require("../../llm/personas");
 const { AppError } = require("../../utils/app-error");
 
 const THREAD_CONTEXT_LIMIT = 5;
 const MAX_ATTACHMENTS = 4;
+const PERSONALITY_TRAITS = ["empathy", "logic", "humor", "confidence", "playfulness"];
 
 function assertVisionEnabled(attachments, visionEnabled) {
   if (attachments && attachments.length > 0 && !visionEnabled) {
@@ -24,6 +27,25 @@ function assertVisionEnabled(attachments, visionEnabled) {
       "Lampiran gambar tidak didukung. Aktifkan vision di BYOK settings untuk mengirim gambar.",
     );
   }
+}
+
+function assertPersonalityOverride(override) {
+  if (override === undefined || override === null) return null;
+  if (typeof override !== "object" || Array.isArray(override)) {
+    throw new AppError(400, "personalityOverride harus berupa objek trait");
+  }
+  const clean = {};
+  let provided = 0;
+  for (const trait of PERSONALITY_TRAITS) {
+    const value = override[trait];
+    if (value === undefined) continue;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+      throw new AppError(400, `Nilai ${trait} harus berupa angka 0-1`);
+    }
+    clean[trait] = value;
+    provided += 1;
+  }
+  return provided > 0 ? clean : null;
 }
 
 async function getProfile(userId) {
@@ -46,7 +68,7 @@ async function getRecentThreadMessages(threadId, userId, limit = THREAD_CONTEXT_
 async function getPersonalityTrend(userId, lookback = 5) {
   try {
     const history = await prisma.personalityHistory.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: lookback + 1,
       select: {
@@ -65,118 +87,195 @@ async function getPersonalityTrend(userId, lookback = 5) {
   }
 }
 
-async function processChat(userId, message, threadId = null, attachments = []) {
+async function softDeleteThread(threadId) {
+  await prisma.thread
+    .update({ where: { id: threadId }, data: { deletedAt: new Date() } })
+    .catch(() => {});
+}
+
+async function runPostPersistSideEffects(userId, message, emotion, extractedMemories) {
+  const tasks = [
+    saveMemory({
+      userId,
+      content: message.trim(),
+      type: "SHORT_TERM",
+      importanceScore: emotion.emotion !== "neutral" ? 0.7 : 0.4,
+    }),
+    ...extractedMemories.map((m) =>
+      saveMemory({
+        userId,
+        content: m.content,
+        type: m.type,
+        category: m.category,
+        importanceScore: m.importanceScore,
+      }),
+    ),
+    evolvePersonality({ userId, emotion }),
+  ];
+  const results = await Promise.allSettled(tasks);
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      logger.warn({
+        message: "Chat post-persist side effect failed",
+        userId,
+        index,
+        error: result.reason?.message,
+      });
+    }
+  });
+}
+
+async function processChat(userId, message, threadId = null, attachments = [], persona) {
   const start = Date.now();
   logger.debug({ message: "Chat pipeline start", userId, threadId });
 
-  const { llm, byok, thinkingEnabled, visionEnabled } = await getLlmForUser(userId);
+  const { llm, byok, visionEnabled } = await getLlmForUser(userId);
 
   if (attachments && attachments.length > MAX_ATTACHMENTS) {
     throw new AppError(400, `Maksimal ${MAX_ATTACHMENTS} lampiran per pesan`);
   }
   assertVisionEnabled(attachments, visionEnabled);
 
-  if (!byok) {
-    const { checkAndIncrementQuota } = require("../../services/quota");
-    await checkAndIncrementQuota(userId);
-  } else {
-    logger.debug({ message: "BYOK active, skipping quota check", userId });
+  let activeThreadId = null;
+  if (threadId) {
+    await getOwnedThread(threadId, userId);
+    activeThreadId = threadId;
   }
 
-  let activeThreadId = threadId;
+  const activePersona = normalizePersona(persona);
 
-  if (!activeThreadId) {
-    const newThread = await createThread(userId);
-    activeThreadId = newThread.id;
-  }
+  return withQuotaForUser(userId, byok, async () => {
+    let createdThread = false;
+    if (!activeThreadId) {
+      const newThread = await createThread(userId);
+      activeThreadId = newThread.id;
+      createdThread = true;
+    }
 
-  const [emotion, memories, personality, profile, threadContext, personalityTrend] =
-    await Promise.all([
-      detectEmotion(message, { llm }),
-      retrieveMemory({ userId, query: message, limit: 5 }),
-      getPersonality(userId),
-      getProfile(userId),
-      getRecentThreadMessages(activeThreadId, userId),
-      getPersonalityTrend(userId),
-    ]);
+    let response;
+    let reasoning;
+    let emotion;
+    let personality;
+    let personalityTrend;
+    let extractedMemories;
 
-  const [extractedMemories, responseResult] = await Promise.all([
-    extractMemories({ userInput: message, emotion }, { llm }).catch((err) => {
-      logger.warn({ message: "Memory extraction failed, continuing", error: err.message });
-      return [];
-    }),
-    generateResponse(
-      {
-        userInput: message,
-        name: profile?.name,
-        profile,
-        personality,
-        personalityTrend,
-        emotion,
+    try {
+      const [
+        emotionResult,
         memories,
+        personalityResult,
+        profile,
         threadContext,
-        attachments,
-      },
-      { llm },
-    ),
-  ]);
+        trendResult,
+      ] = await Promise.all([
+        detectEmotion(message, { llm }),
+        retrieveMemory({ userId, query: message, limit: 5 }),
+        getPersonality(userId),
+        getProfile(userId),
+        getRecentThreadMessages(activeThreadId, userId),
+        getPersonalityTrend(userId),
+      ]);
 
-  const response = responseResult.text;
-  const reasoning = responseResult.reasoning;
+      emotion = emotionResult;
+      personality = personalityResult;
+      personalityTrend = trendResult;
 
-  await prisma.conversation.create({
-    data: {
-      userId,
-      threadId: activeThreadId,
-      message: message.trim(),
+      const [extracted, responseResult] = await Promise.all([
+        extractMemories({ userInput: message, emotion }, { llm }).catch((err) => {
+          logger.warn({
+            message: "Memory extraction failed, continuing",
+            error: err.message,
+          });
+          return [];
+        }),
+        generateResponse(
+          {
+            userInput: message,
+            name: profile?.name,
+            profile,
+            personality,
+            personalityTrend,
+            emotion,
+            memories,
+            threadContext,
+            attachments,
+            persona: activePersona,
+          },
+          { llm },
+        ),
+      ]);
+
+      extractedMemories = extracted;
+      response = responseResult.text;
+      reasoning = responseResult.reasoning;
+
+      // The conversation row is the contract with the client: if it does not
+      // exist, the request failed. Everything after this is best-effort.
+      await prisma.conversation.create({
+        data: {
+          userId,
+          threadId: activeThreadId,
+          message: message.trim(),
+          response,
+          reasoning: reasoning || null,
+          emotion,
+          persona: activePersona,
+          partial: false,
+        },
+      });
+    } catch (err) {
+      if (createdThread) {
+        await softDeleteThread(activeThreadId);
+      }
+      throw err;
+    }
+
+    await runPostPersistSideEffects(userId, message, emotion, extractedMemories);
+
+    let updatedPersonality = personality;
+    try {
+      updatedPersonality = await getPersonality(userId);
+    } catch (err) {
+      logger.warn({
+        message: "Failed to reload personality after chat",
+        userId,
+        error: err.message,
+      });
+    }
+
+    let titleResult = { changed: false };
+    try {
+      const convCount = await prisma.conversation.count({
+        where: { threadId: activeThreadId, userId, deletedAt: null },
+      });
+      titleResult = await generateThreadTitle(activeThreadId, userId, {
+        llm,
+        conversationCount: convCount,
+      });
+    } catch (err) {
+      logger.warn({
+        message: "Thread title generation failed",
+        userId,
+        error: err.message,
+      });
+    }
+
+    logger.debug({ message: "Chat pipeline done", userId, duration: Date.now() - start });
+
+    const result = {
       response,
       reasoning: reasoning || null,
       emotion,
-    },
+      personality_snapshot: updatedPersonality,
+      threadId: activeThreadId,
+      persona: activePersona,
+      partial: false,
+    };
+    if (titleResult.changed) {
+      result.title = titleResult.title;
+    }
+    return result;
   });
-
-  await saveMemory({
-    userId,
-    content: message.trim(),
-    type: "SHORT_TERM",
-    importanceScore: emotion.emotion !== "neutral" ? 0.7 : 0.4,
-  });
-
-  for (const m of extractedMemories) {
-    await saveMemory({
-      userId,
-      content: m.content,
-      type: m.type,
-      importanceScore: m.importanceScore,
-    });
-  }
-
-  await evolvePersonality({ userId, emotion });
-
-  const updatedPersonality = await getPersonality(userId);
-
-  const convCount = await prisma.conversation.count({
-    where: { threadId: activeThreadId, deletedAt: null },
-  });
-  const titleResult = await generateThreadTitle(activeThreadId, userId, {
-    llm,
-    conversationCount: convCount,
-  });
-
-  const duration = Date.now() - start;
-  logger.debug({ message: "Chat pipeline done", userId, duration });
-
-  const result = {
-    response,
-    reasoning: reasoning || null,
-    emotion,
-    personality_snapshot: updatedPersonality,
-    threadId: activeThreadId,
-  };
-  if (titleResult.changed) {
-    result.title = titleResult.title;
-  }
-  return result;
 }
 
 async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } = {}) {
@@ -200,6 +299,8 @@ async function getChatHistory(userId, { page = 1, limit = 20, threadId = null } 
         response: true,
         reasoning: true,
         emotion: true,
+        persona: true,
+        partial: true,
         createdAt: true,
         threadId: true,
       },
@@ -221,54 +322,55 @@ async function simulateChat(userId, message, opts = {}) {
   const start = Date.now();
   logger.debug({ message: "Simulate chat start", userId });
 
-  const { llm, visionEnabled } = await getLlmForUser(userId);
-  assertVisionEnabled([], visionEnabled);
+  const override = assertPersonalityOverride(opts.personalityOverride);
+  const { llm, byok } = await getLlmForUser(userId);
 
-  const [emotion, memories, personality, profile, threadContext, personalityTrend] =
-    await Promise.all([
-      detectEmotion(message, { llm }),
-      retrieveMemorySafe({ userId, query: message, limit: 5 }),
-      getPersonality(userId),
-      getProfile(userId),
-      Promise.resolve([]),
-      getPersonalityTrend(userId),
+  return withQuotaForUser(userId, byok, async () => {
+    const [emotion, memories, personality, profile, threadContext, personalityTrend] =
+      await Promise.all([
+        detectEmotion(message, { llm }),
+        retrieveMemorySafe({ userId, query: message, limit: 5 }),
+        getPersonality(userId),
+        getProfile(userId),
+        Promise.resolve([]),
+        getPersonalityTrend(userId),
+      ]);
+
+    const effectivePersonality = override
+      ? { ...personality, ...override }
+      : personality;
+
+    const [assistantResponse, { text: response, reasoning }] = await Promise.all([
+      assistantChain.invoke({ userInput: message }, { llm }),
+      generateResponse(
+        {
+          userInput: message,
+          name: profile?.name,
+          profile,
+          personality: effectivePersonality,
+          personalityTrend,
+          emotion,
+          memories,
+          threadContext,
+        },
+        { llm },
+      ),
     ]);
 
-  const effectivePersonality = opts.personalityOverride
-    ? { ...personality, ...opts.personalityOverride }
-    : personality;
+    logger.debug({ message: "Simulate chat done", userId, duration: Date.now() - start });
 
-  const [assistantResponse, { text: response, reasoning }] = await Promise.all([
-    assistantChain.invoke({ userInput: message }, { llm }),
-    generateResponse(
-      {
-        userInput: message,
-        name: profile?.name,
-        profile,
-        personality: effectivePersonality,
-        personalityTrend,
+    return {
+      twin: {
+        response,
+        reasoning: reasoning || null,
         emotion,
-        memories,
-        threadContext,
+        personality_snapshot: effectivePersonality,
       },
-      { llm },
-    ),
-  ]);
-
-  const duration = Date.now() - start;
-  logger.debug({ message: "Simulate chat done", userId, duration });
-
-  return {
-    twin: {
-      response,
-      reasoning: reasoning || null,
-      emotion,
-      personality_snapshot: effectivePersonality,
-    },
-    assistant: {
-      response: assistantResponse,
-    },
-  };
+      assistant: {
+        response: assistantResponse,
+      },
+    };
+  });
 }
 
 async function retrieveMemorySafe(args) {

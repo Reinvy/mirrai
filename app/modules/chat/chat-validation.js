@@ -1,6 +1,7 @@
 "use strict";
 
 const { AppError } = require("../../utils/app-error");
+const { PERSONA_IDS } = require("../../llm/personas");
 
 const MAX_MESSAGE_LEN = 4000;
 const MAX_ATTACHMENTS = 4;
@@ -15,7 +16,7 @@ const ALLOWED_IMAGE_MIME = new Set([
 
 class ChatValidation {
   static validateChat(req, res, next) {
-    const { message, attachments } = req.body;
+    const { message, attachments, threadId, persona } = req.body;
     if (
       !message ||
       typeof message !== "string" ||
@@ -25,6 +26,19 @@ class ChatValidation {
     }
     if (message.length > MAX_MESSAGE_LEN) {
       throw new AppError(400, `Pesan terlalu panjang (maks ${MAX_MESSAGE_LEN} karakter)`);
+    }
+    if (threadId !== undefined && threadId !== null) {
+      if (typeof threadId !== "string" || threadId.trim().length === 0) {
+        throw new AppError(400, "threadId tidak valid");
+      }
+    }
+    if (persona !== undefined) {
+      if (typeof persona !== "string" || !PERSONA_IDS.includes(persona)) {
+        throw new AppError(
+          400,
+          `Persona tidak valid. Pilihan: ${PERSONA_IDS.join(", ")}`,
+        );
+      }
     }
     if (attachments !== undefined) {
       if (!Array.isArray(attachments)) {

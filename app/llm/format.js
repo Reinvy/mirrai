@@ -2,9 +2,30 @@
 
 const PERSONALITY_TRAITS = ["empathy", "logic", "humor", "confidence", "playfulness"];
 
-function formatProfile({ name, bio }) {
-  const safeName = name && String(name).trim() ? String(name).trim() : "User";
-  const safeBio = bio && String(bio).trim() ? String(bio).trim() : "(belum ada bio)";
+const MAX_MEMORY_ITEMS = 5;
+const MAX_MEMORY_CHARS = 500;
+const MAX_THREAD_ITEMS = 5;
+const MAX_THREAD_CHARS = 1000;
+const MAX_BIO_CHARS = 280;
+
+function stripDelimiters(text) {
+  return String(text).replace(/[<>]/g, "");
+}
+
+function truncate(text, maxChars) {
+  const value = String(text);
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}…`;
+}
+
+function sanitize(text, maxChars) {
+  return truncate(stripDelimiters(String(text)).trim(), maxChars);
+}
+
+function formatProfile({ name, bio } = {}) {
+  const rawName = name && String(name).trim() ? String(name).trim() : "User";
+  const safeName = sanitize(rawName, 64);
+  const safeBio = bio && String(bio).trim() ? sanitize(bio, MAX_BIO_CHARS) : "(belum ada bio)";
   return `Nama: ${safeName}\nBio: ${safeBio}`;
 }
 
@@ -16,11 +37,14 @@ function formatPersonality(personality) {
 }
 
 function formatMemories(memories) {
-  if (!Array.isArray(memories) || memories.length === 0) return "Belum ada memory relevan";
+  if (!Array.isArray(memories) || memories.length === 0) {
+    return "(belum ada memory relevan)";
+  }
   return memories
+    .slice(0, MAX_MEMORY_ITEMS)
     .map((m, i) => {
       const type = m?.type ? `[${m.type}]` : "[MEMORY]";
-      const content = m?.content ? String(m.content) : "";
+      const content = m?.content ? sanitize(m.content, MAX_MEMORY_CHARS) : "";
       return `${i + 1}. ${type} ${content}`;
     })
     .join("\n");
@@ -37,11 +61,15 @@ function formatThreadContext(messages) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return "(belum ada percakapan sebelumnya di thread ini)";
   }
-  const ordered = [...messages].reverse();
+  const ordered = [...messages].reverse().slice(-MAX_THREAD_ITEMS);
   return ordered
     .map((m) => {
-      const userPart = m?.message ? `User: ${String(m.message).trim()}` : "";
-      const twinPart = m?.response ? `Twin: ${String(m.response).trim()}` : "";
+      const userPart = m?.message
+        ? `User: ${sanitize(m.message, MAX_THREAD_CHARS)}`
+        : "";
+      const twinPart = m?.response
+        ? `Twin: ${sanitize(m.response, MAX_THREAD_CHARS)}`
+        : "";
       return [userPart, twinPart].filter(Boolean).join("\n");
     })
     .filter(Boolean)

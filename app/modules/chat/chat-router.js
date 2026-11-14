@@ -1,7 +1,6 @@
 "use strict";
 
 const express = require("express");
-const rateLimit = require("express-rate-limit");
 const { ChatValidation } = require("./chat-validation");
 const {
   chatController,
@@ -30,36 +29,20 @@ const {
 } = require("./insights-controller");
 const { recapController } = require("./recap-controller");
 const { tokenVerify } = require("../../middlewares/token-verify");
+const {
+  chatRateLimiter,
+  threadRateLimiter,
+  readLimiter,
+} = require("../../middlewares/rate-limiters");
 
 const router = express.Router();
 
 // Public, unauthenticated routes MUST come before any `/:param` routes
 // to prevent Express from matching them as conversationId/threadId.
-router.get("/shared/:slug", getSharedThreadController);
-router.get("/users/:username", getPublicProfileController);
-router.get("/users/:username/threads", getPublicThreadsController);
-router.get("/compare", compareController);
-
-const chatRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // Increased for smooth interaction
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Terlalu banyak request. Coba lagi dalam beberapa saat.",
-  },
-});
-const threadRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Terlalu banyak request. Coba lagi sebentar lagi.",
-  },
-});
+router.get("/shared/:slug", readLimiter, getSharedThreadController);
+router.get("/users/:username", readLimiter, getPublicProfileController);
+router.get("/users/:username/threads", readLimiter, getPublicThreadsController);
+router.get("/compare", readLimiter, compareController);
 
 /**
  * @openapi
@@ -125,6 +108,7 @@ const threadRateLimiter = rateLimit({
 router.get(
   "/",
   tokenVerify,
+  readLimiter,
   ChatValidation.validateGetHistory,
   chatHistoryController,
 );
@@ -265,7 +249,7 @@ router.post(
  *       200:
  *         description: Insights berhasil diambil
  */
-router.get("/insights", tokenVerify, chatInsightsController);
+router.get("/insights", tokenVerify, readLimiter, chatInsightsController);
 
 /**
  * @openapi
@@ -282,7 +266,7 @@ router.get("/insights", tokenVerify, chatInsightsController);
  *     responses:
  *       200: { description: Mood timeline }
  */
-router.get("/mood-timeline", tokenVerify, moodTimelineController);
+router.get("/mood-timeline", tokenVerify, readLimiter, moodTimelineController);
 
 /**
  * @openapi
@@ -299,7 +283,7 @@ router.get("/mood-timeline", tokenVerify, moodTimelineController);
  *     responses:
  *       200: { description: Recap generated }
  */
-router.get("/recap", tokenVerify, recapController);
+router.get("/recap", tokenVerify, chatRateLimiter, recapController);
 
 /**
  * @openapi
@@ -316,6 +300,7 @@ router.get("/recap", tokenVerify, recapController);
 router.get(
   "/threads",
   tokenVerify,
+  readLimiter,
   threadRateLimiter,
   getThreadsController,
 );

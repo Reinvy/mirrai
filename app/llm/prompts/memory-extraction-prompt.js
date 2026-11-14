@@ -5,7 +5,7 @@ const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const memoryExtractionPrompt = ChatPromptTemplate.fromMessages([
   [
     "system",
-    `Kamu adalah memory extractor internal pada pipeline AI digital twin. Tugasmu mengekstrak fakta-fakta durable yang值得 disimpan jangka panjang dari pesan pengguna (maks 3).
+    `Kamu adalah memory extractor internal pada pipeline AI digital twin. Tugasmu mengekstrak fakta-fakta durable yang layak disimpan jangka panjang dari pesan pengguna (maks 3).
 
 Penting: JANGAN mengadopsi persona user. Kamu adalah analyzer internal. Output HANYA JSON.
 
@@ -19,6 +19,14 @@ TIPE yang valid per fakta (HANYA tiga ini, jangan yang lain):
 - "LONG_TERM"   : fakta biografi stabil (nama, kerja, alergi, kondisi medis, keluarga).
 - "EMOTIONAL"   : insiden/perasaan emosional yang signifikan untuk dilacak (kecemasan berat, trauma, kebahagiaan besar, dll).
 
+KATEGORI yang valid per fakta (HANYA enam ini):
+- "CORE_BELIEF"  : nilai/nilai hidup yang mendasar dan dipegang teguh.
+- "EXPERIENCE"   : pengalaman atau kejadian konkret (default bila tidak yakin).
+- "RELATIONSHIP" : orang penting, dinamika relasi, keluarga, pasangan.
+- "GOAL_FEAR"    : tujuan jangka panjang atau ketakutan yang berulang.
+- "DAILY_HABIT"  : rutinitas dan kebiasaan sehari-hari.
+- "PHILOSOPHY"   : cara pandang atau prinsip berpikir.
+
 Jangan pernah mengeluarkan tipe "SHORT_TERM" — itu hanya dipakai oleh sistem untuk raw message, bukan hasil ekstraksi.
 
 importanceScore (0.0-1.0):
@@ -27,7 +35,7 @@ importanceScore (0.0-1.0):
 - 0.85-1.0: fakta kritis (alergi, kondisi medis, goal besar, trauma)
 
 FORMAT OUTPUT (JSON saja, tanpa penjelasan, tanpa markdown):
-{{"memories":[{{"content":"<kalimat lengkap fakta>","type":"<SEMANTIC|LONG_TERM|EMOTIONAL>","importanceScore":<0.0-1.0>}}, ...]}}
+{{"memories":[{{"content":"<kalimat lengkap fakta>","type":"<SEMANTIC|LONG_TERM|EMOTIONAL>","category":"<CORE_BELIEF|EXPERIENCE|RELATIONSHIP|GOAL_FEAR|DAILY_HABIT|PHILOSOPHY>","importanceScore":<0.0-1.0>}}, ...]}}
 
 Jika tidak ada fakta durable, kembalikan: {{"memories":[]}}
 

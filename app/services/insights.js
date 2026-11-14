@@ -2,12 +2,13 @@
 
 const { prisma } = require("../config/db");
 const { logger } = require("../config/logger");
+const { startOfDay, localDateKey } = require("../utils/date");
 
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
+const PERSONALITY_TRAITS = ["empathy", "logic", "humor", "confidence", "playfulness"];
+const SUMMARY_TTL_MS = 10 * 60 * 1000;
+
+// userId -> { value: string, expiresAt: number }
+const summaryCache = new Map();
 
 async function getChatInsights(userId) {
   const now = new Date();
@@ -33,15 +34,15 @@ async function getChatInsights(userId) {
     }),
   ]);
 
-  // Aggregate last 7 days by day
+  // Aggregate last 7 days by local day
   const days = [];
   for (let i = 6; i >= 0; i--) {
-    const dayStart = startOfDay(new Date(now.getTime() - i * 86400000));
-    days.push({ date: dayStart.toISOString().slice(0, 10), count: 0 });
+    const key = localDateKey(new Date(now.getTime() - i * 86400000));
+    days.push({ date: key, count: 0 });
   }
   const dayMap = new Map(days.map((d) => [d.date, d]));
   for (const c of last7Days) {
-    const key = startOfDay(c.createdAt).toISOString().slice(0, 10);
+    const key = localDateKey(c.createdAt);
     if (dayMap.has(key)) dayMap.get(key).count++;
   }
 
@@ -87,13 +88,12 @@ async function getMoodTimeline(userId, days = 30) {
   // Initialize all days
   const buckets = new Map();
   for (let i = days - 1; i >= 0; i--) {
-    const day = startOfDay(new Date(Date.now() - i * 86400000));
-    const key = day.toISOString().slice(0, 10);
+    const key = localDateKey(new Date(Date.now() - i * 86400000));
     buckets.set(key, { date: key, total: 0, emotions: {} });
   }
 
   for (const c of conversations) {
-    const key = startOfDay(c.createdAt).toISOString().slice(0, 10);
+    const key = localDateKey(c.createdAt);
     if (!buckets.has(key)) continue;
     const bucket = buckets.get(key);
     const label = c.emotion?.emotion || "unknown";
@@ -166,13 +166,13 @@ async function getMemoryInsights(userId) {
   };
 }
 
-async function getPersonalityInsights(userId, { llm } = {}) {
+async function getPersonalityInsights(userId, { includeSummary = false } = {}) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
 
   const [current, recentHistory] = await Promise.all([
-    prisma.personality.findUnique({ where: { userId } }),
+    prisma.personality.findFirst({ where: { userId, deletedAt: null } }),
     prisma.personalityHistory.findMany({
-      where: { userId, createdAt: { gte: sevenDaysAgo } },
+      where: { userId, deletedAt: null, createdAt: { gte: sevenDaysAgo } },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -187,14 +187,13 @@ async function getPersonalityInsights(userId, { llm } = {}) {
   }
 
   // Find biggest change over the window
-  const traits = ["empathy", "logic", "humor", "confidence", "playfulness"];
   let biggestChange = null;
-  let trendByTrait = {};
+  const trendByTrait = {};
 
   if (recentHistory.length >= 2) {
     const first = recentHistory[0];
     const last = recentHistory[recentHistory.length - 1];
-    for (const t of traits) {
+    for (const t of PERSONALITY_TRAITS) {
       const delta = last[t] - first[t];
       trendByTrait[t] = {
         delta: Math.round(delta * 100) / 100,
@@ -205,21 +204,31 @@ async function getPersonalityInsights(userId, { llm } = {}) {
       }
     }
   } else {
-    for (const t of traits) {
+    for (const t of PERSONALITY_TRAITS) {
       trendByTrait[t] = { delta: 0, direction: "stable" };
     }
   }
 
-  // LLM summary (best effort, fallback to static)
-  let summary = null;
-  try {
-    summary = await generatePersonalitySummary(current, trendByTrait, { llm });
-  } catch (err) {
-    logger.error({
-      message: "Personality summary LLM call failed",
-      error: err.message,
-    });
-    summary = staticSummary(current, trendByTrait);
+  let summary = staticSummary(current, trendByTrait);
+  if (includeSummary) {
+    const cached = summaryCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) {
+      summary = cached.value;
+    } else {
+      try {
+        const generated = await generatePersonalitySummary(current, trendByTrait);
+        summary = generated;
+        summaryCache.set(userId, {
+          value: generated,
+          expiresAt: Date.now() + SUMMARY_TTL_MS,
+        });
+      } catch (err) {
+        logger.error({
+          message: "Personality summary LLM call failed",
+          error: err.message,
+        });
+      }
+    }
   }
 
   return {
@@ -230,7 +239,7 @@ async function getPersonalityInsights(userId, { llm } = {}) {
   };
 }
 
-async function generatePersonalitySummary(current, trend, { llm } = {}) {
+async function generatePersonalitySummary(current, trend) {
   const { getLlm } = require("../config/openai");
   const { ChatPromptTemplate } = require("@langchain/core/prompts");
   const { StringOutputParser } = require("@langchain/core/output_parsers");
@@ -247,7 +256,7 @@ async function generatePersonalitySummary(current, trend, { llm } = {}) {
     ["human", `Trait: ${traitsStr}`],
   ]);
 
-  const chain = prompt.pipe(llm || getLlm()).pipe(new StringOutputParser());
+  const chain = prompt.pipe(getLlm()).pipe(new StringOutputParser());
   return await chain.invoke({});
 }
 
@@ -260,18 +269,12 @@ function staticSummary(current, trend) {
   return `Trait terkuat kamu adalah ${top[0]} (${(current[top[0]] * 100).toFixed(0)}%). Digital twin kamu mencerminkan gaya kamu yang ${top[1].direction === "increasing" ? "semakin berkembang" : "stabil"} di area ini.`;
 }
 
-module.exports = {
-  getChatInsights,
-  getMemoryInsights,
-  getPersonalityInsights,
-  getMoodTimeline,
-  getMemoryGraph,
-};
-
 /**
  * Build a graph of memories based on embedding similarity.
- * For each memory, find its K nearest neighbors and emit edges.
- * Result: { nodes: [{id, content, type, importanceScore}], edges: [{source, target, weight}] }
+ *
+ * Edges are computed pairwise once, then each node keeps only its strongest
+ * `maxNeighbors` links. The edge set is emitted in a canonical direction so a
+ * pair never appears twice.
  */
 async function getMemoryGraph(userId, options = {}) {
   const { limit = 50, similarityThreshold = 0.75, maxNeighbors = 5 } = options;
@@ -309,36 +312,32 @@ async function getMemoryGraph(userId, options = {}) {
     if (arr) vectorMap.set(v.id, arr);
   }
 
-  // Compute pairwise similarity
-  const edges = [];
   const validMemories = memories.filter((m) => vectorMap.has(m.id));
+  const neighbors = new Map(validMemories.map((m) => [m.id, []]));
+
   for (let i = 0; i < validMemories.length; i++) {
     const a = validMemories[i];
     const aVec = vectorMap.get(a.id);
-    const similarities = [];
     for (let j = i + 1; j < validMemories.length; j++) {
       const b = validMemories[j];
-      const bVec = vectorMap.get(b.id);
-      const sim = cosineSimilarity(aVec, bVec);
-      if (sim >= similarityThreshold) {
-        edges.push({
-          source: a.id,
-          target: b.id,
-          weight: Math.round(sim * 100) / 100,
-        });
-        similarities.push({ id: b.id, sim });
-      }
+      const sim = cosineSimilarity(aVec, vectorMap.get(b.id));
+      if (sim < similarityThreshold) continue;
+      const weight = Math.round(sim * 100) / 100;
+      neighbors.get(a.id).push({ id: b.id, weight });
+      neighbors.get(b.id).push({ id: a.id, weight });
     }
-    // Limit to top K neighbors per node
-    similarities.sort((a, b) => b.sim - a.sim);
-    if (similarities.length > maxNeighbors) {
-      const allowed = new Set(similarities.slice(0, maxNeighbors).map((s) => s.id));
-      // Remove excess edges
-      for (let k = edges.length - 1; k >= 0; k--) {
-        if (edges[k].source === a.id && !allowed.has(edges[k].target)) {
-          edges.splice(k, 1);
-        }
-      }
+  }
+
+  const edges = [];
+  const emitted = new Set();
+  for (const [nodeId, list] of neighbors) {
+    list.sort((x, y) => y.weight - x.weight);
+    for (const { id: otherId, weight } of list.slice(0, maxNeighbors)) {
+      const [source, target] = nodeId < otherId ? [nodeId, otherId] : [otherId, nodeId];
+      const key = `${source}|${target}`;
+      if (emitted.has(key)) continue;
+      emitted.add(key);
+      edges.push({ source, target, weight });
     }
   }
 
@@ -362,7 +361,7 @@ function parsePgVector(text) {
 }
 
 function cosineSimilarity(a, b) {
-  if (a.length !== b.length) return 0;
+  if (!a || !b || a.length !== b.length) return 0;
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -373,3 +372,11 @@ function cosineSimilarity(a, b) {
   }
   return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
 }
+
+module.exports = {
+  getChatInsights,
+  getMemoryInsights,
+  getPersonalityInsights,
+  getMoodTimeline,
+  getMemoryGraph,
+};

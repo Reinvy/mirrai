@@ -4,6 +4,14 @@ const { memoryExtractionChain } = require("../llm/chains/memory-extraction-chain
 const { logger } = require("../config/logger");
 
 const VALID_TYPES = new Set(["LONG_TERM", "SEMANTIC", "EMOTIONAL"]);
+const VALID_CATEGORIES = new Set([
+  "CORE_BELIEF",
+  "EXPERIENCE",
+  "RELATIONSHIP",
+  "GOAL_FEAR",
+  "DAILY_HABIT",
+  "PHILOSOPHY",
+]);
 const MAX_EXTRACTIONS = 3;
 const MIN_SCORE = 0.1;
 const MAX_SCORE = 1.0;
@@ -22,11 +30,13 @@ function normalize(raw, seen) {
     const content = typeof item.content === "string" ? item.content.trim() : "";
     if (!content) continue;
     if (seen.has(content.toLowerCase())) continue;
+    const rawCategory = String(item.category || "").toUpperCase();
+    const category = VALID_CATEGORIES.has(rawCategory) ? rawCategory : "EXPERIENCE";
     let score = Number(item.importanceScore);
     if (isNaN(score)) score = 0.6;
     score = clamp(score, MIN_SCORE, MAX_SCORE);
     seen.add(content.toLowerCase());
-    out.push({ content, type, importanceScore: score });
+    out.push({ content, type, category, importanceScore: score });
     if (out.length >= MAX_EXTRACTIONS) break;
   }
   return out;

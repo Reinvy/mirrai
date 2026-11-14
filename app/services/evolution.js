@@ -145,8 +145,8 @@ function computeMemoryDrift(memories) {
 }
 
 async function evolvePersonality({ userId, emotion }) {
-  const personality = await prisma.personality.findUnique({
-    where: { userId },
+  const personality = await prisma.personality.findFirst({
+    where: { userId, deletedAt: null },
   });
   if (!personality) return null;
 
@@ -194,11 +194,22 @@ async function evolvePersonality({ userId, emotion }) {
     ),
   });
 
-  const updated = await prisma.personality.update({
-    where: { userId },
-    data: updatedData,
-  });
+  // Apply the deltas inside Postgres so two concurrent chats cannot clobber
+  // each other with a stale read-modify-write.
+  const rows = await prisma.$queryRaw`
+    UPDATE "Personality"
+    SET empathy = LEAST(1.0, GREATEST(0.1, empathy + ${emotionDelta.empathy + memoryDelta.empathy})),
+        logic = LEAST(1.0, GREATEST(0.1, logic + ${emotionDelta.logic + memoryDelta.logic})),
+        humor = LEAST(1.0, GREATEST(0.1, humor + ${emotionDelta.humor + memoryDelta.humor})),
+        confidence = LEAST(1.0, GREATEST(0.1, confidence + ${emotionDelta.confidence + memoryDelta.confidence})),
+        playfulness = LEAST(1.0, GREATEST(0.1, playfulness + ${emotionDelta.playfulness + memoryDelta.playfulness})),
+        "updatedAt" = NOW()
+    WHERE "userId" = ${userId} AND "deletedAt" IS NULL
+    RETURNING *
+  `;
+  if (rows.length === 0) return null;
 
+  const updated = rows[0];
   await savePersonalitySnapshot(userId, updated);
 
   const emotionalTypes = ["sad", "angry", "anxious", "lonely"];
