@@ -99,6 +99,34 @@ describe("HTTP hardening", () => {
       expect(headersSentResponse.json).not.toHaveBeenCalled();
     });
 
+    it("returns 502 for upstream provider errors", () => {
+      const response = {
+        headersSent: false,
+        statusCode: 0,
+        payload: null,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(body) {
+          this.payload = body;
+          return this;
+        },
+      };
+      errorHandler(
+        Object.assign(new Error("bad gateway payload"), {
+          name: "APIError",
+          status: 400,
+          headers: {},
+        }),
+        { path: "/x", method: "POST" },
+        response,
+        jest.fn(),
+      );
+      expect(response.statusCode).toBe(502);
+      expect(response.payload.message).toMatch(/Layanan AI/i);
+    });
+
     it("maps prisma errors without reading prototype keys", () => {
       const response = {
         headersSent: false,

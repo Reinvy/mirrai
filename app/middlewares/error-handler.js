@@ -48,12 +48,24 @@ function errorHandler(err, req, res, next) {
       .json({ status: "error", message: err.message });
   }
 
-  // Client errors raised by middleware (body parser, limiters, CORS, ...)
-  if (typeof err.status === "number" && err.status >= 400 && err.status < 500) {
-    return res.status(err.status).json({
+  // Errors raised by the LLM provider SDK carry an HTTP status too; they are
+  // upstream failures, not invalid client requests.
+  if (err?.name === "APIError" || (err?.status >= 400 && Boolean(err?.headers))) {
+    return res.status(502).json({
       status: "error",
-      message: err.expose && err.message ? err.message : "Request tidak valid",
+      message: "Layanan AI sedang bermasalah. Coba lagi sebentar lagi.",
     });
+  }
+
+  // Client errors raised by middleware (body parser, CORS, ...); http-errors
+  // marks these as exposed, while unexpected 4xx from libraries are not.
+  if (
+    err?.expose === true &&
+    typeof err.status === "number" &&
+    err.status >= 400 &&
+    err.status < 500
+  ) {
+    return res.status(err.status).json({ status: "error", message: err.message });
   }
 
   const message =
